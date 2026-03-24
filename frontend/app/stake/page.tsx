@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 
-const BASE = "http://localhost:8000";
+const BASE = "";
 
 const TIER_COLORS: Record<string, string> = {
   Flexible: "border-gray-600 bg-gray-900",

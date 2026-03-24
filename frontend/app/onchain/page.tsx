@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 
-const BASE = "http://localhost:8000";
+const BASE = "";
 
 export default function OnchainPage() {
   const [market, setMarket] = useState<any>(null);

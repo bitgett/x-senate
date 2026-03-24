@@ -2,10 +2,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { fetchProposal, getSenateVotes } from "@/lib/api";
+import { fetchProposal, getSenateVotes, getSenateReviewUrl } from "@/lib/api";
 import { Proposal, AgentVote, PERSONA_META } from "@/types";
-
-const BASE = "http://localhost:8000";
 
 export default function SenatePage() {
   const { id } = useParams<{ id: string }>();
@@ -29,7 +27,7 @@ export default function SenatePage() {
     setError("");
 
     try {
-      const res = await fetch(`${BASE}/api/senate/review/${id}`, { method: "POST" });
+      const res = await fetch(getSenateReviewUrl(id), { method: "POST" });
       if (!res.ok) throw new Error(await res.text());
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();

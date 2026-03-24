@@ -1,9 +1,9 @@
-const BASE = "http://localhost:8000";
+const BASE = typeof window !== "undefined" ? "" : (process.env.NEXT_PUBLIC_API_BASE ?? "");
 
 export async function fetchProposals(projectId?: string) {
   const url = projectId
-    ? `${BASE}/api/proposals/?project_id=${projectId}`
-    : `${BASE}/api/proposals/`;
+    ? `${BASE}/api/proposals?project_id=${projectId}`
+    : `${BASE}/api/proposals`;
   const res = await fetch(url);
   if (!res.ok) throw new Error("Failed to fetch proposals");
   return res.json();
@@ -93,4 +93,12 @@ export async function runReflection(proposalId: string) {
   return res.json();
 }
 
-export const WS_BASE = "ws://localhost:8000";
+/** SSE stream URL for relay debate (replaces WebSocket) */
+export function getDebateStreamUrl(proposalId: string) {
+  return `${BASE}/api/debate/stream/${proposalId}`;
+}
+
+/** SSE stream URL for senate review */
+export function getSenateReviewUrl(proposalId: string) {
+  return `${BASE}/api/senate/review/${proposalId}`;
+}

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { fetchProjects, fetchPlatformStats, registerProject } from "@/lib/api";
 import { Project } from "@/types";
 
-const BASE = "http://localhost:8000";
+const BASE = "";
 
 function truncateAddr(addr: string) {
   if (!addr || addr.length < 10) return addr;

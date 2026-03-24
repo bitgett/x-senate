@@ -2,10 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { fetchProposal, getDebateTurns, startDebate } from "@/lib/api";
+import { fetchProposal, getDebateTurns, startDebate, getDebateStreamUrl } from "@/lib/api";
 import { Proposal, DebateTurn, PERSONA_META } from "@/types";
-
-const WS_BASE = "ws://localhost:8000";
 
 type DebateEvent = {
   type: "turn_start" | "chunk" | "turn_end" | "summary" | "done" | "error";
@@ -31,7 +29,7 @@ export default function DebatePage() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
   const [existingTurns, setExistingTurns] = useState<DebateTurn[]>([]);
-  const wsRef = useRef<WebSocket | null>(null);
+  const readerRef = useRef<ReadableStreamDefaultReader | null>(null);
   const feedRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -39,7 +37,6 @@ export default function DebatePage() {
       setProposal(p);
       setExistingTurns(t);
       if (t.length === 5) {
-        // Already debated — show results
         const turnMap: Record<string, string> = {};
         const oliners: Record<string, string> = {};
         t.forEach((turn: DebateTurn) => {
@@ -56,7 +53,7 @@ export default function DebatePage() {
     });
   }, [id]);
 
-  async function startDebateWS() {
+  async function startDebateSSE() {
     setDebating(true);
     setTurns({});
     setOneLiners({});
@@ -64,42 +61,55 @@ export default function DebatePage() {
     setDone(false);
     setError("");
 
-    // Make sure status is In_Debate
     try { await startDebate(id); } catch {}
 
-    const ws = new WebSocket(`${WS_BASE}/api/debate/ws/${id}`);
-    wsRef.current = ws;
+    try {
+      const res = await fetch(getDebateStreamUrl(id));
+      if (!res.ok) throw new Error(await res.text());
 
-    ws.onmessage = (event) => {
-      const data: DebateEvent = JSON.parse(event.data);
+      const reader = res.body!.getReader();
+      readerRef.current = reader;
+      const decoder = new TextDecoder();
+      let buffer = "";
 
-      if (data.type === "turn_start") {
-        setActiveAgent(data.agent_name!);
-        setTurns((prev) => ({ ...prev, [data.agent_name!]: "" }));
-      } else if (data.type === "chunk") {
-        setTurns((prev) => ({
-          ...prev,
-          [data.agent_name!]: (prev[data.agent_name!] || "") + data.chunk,
-        }));
-        // Auto-scroll
-        if (feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight;
-      } else if (data.type === "turn_end") {
-        setActiveAgent(null);
-      } else if (data.type === "summary") {
-        setOneLiners(data.one_liners || {});
-        setDone(true);
-      } else if (data.type === "done") {
-        setDebating(false);
-      } else if (data.error) {
-        setError(data.error);
-        setDebating(false);
+      while (true) {
+        const { done: streamDone, value } = await reader.read();
+        if (streamDone) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const data: DebateEvent = JSON.parse(line.slice(6));
+
+          if (data.type === "turn_start") {
+            setActiveAgent(data.agent_name!);
+            setTurns((prev) => ({ ...prev, [data.agent_name!]: "" }));
+          } else if (data.type === "chunk") {
+            setTurns((prev) => ({
+              ...prev,
+              [data.agent_name!]: (prev[data.agent_name!] || "") + data.chunk,
+            }));
+            if (feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight;
+          } else if (data.type === "turn_end") {
+            setActiveAgent(null);
+          } else if (data.type === "summary") {
+            setOneLiners(data.one_liners || {});
+            setDone(true);
+          } else if (data.type === "done") {
+            setDebating(false);
+          } else if (data.error) {
+            setError(data.error);
+            setDebating(false);
+          }
+        }
       }
-    };
-
-    ws.onerror = () => {
-      setError("WebSocket connection failed — is backend running?");
+    } catch (e: any) {
+      setError(e.message || "Debate stream failed");
       setDebating(false);
-    };
+    }
   }
 
   const agentOrder = ["Guardian", "Merchant", "Architect", "Diplomat", "Populist"];
@@ -126,7 +136,7 @@ export default function DebatePage() {
         </div>
         {!debating && !done && (
           <button
-            onClick={startDebateWS}
+            onClick={startDebateSSE}
             className="bg-purple-600 hover:bg-purple-500 text-white px-5 py-2.5 rounded-xl font-semibold transition-colors shrink-0"
           >
             ⚡ Start Debate
