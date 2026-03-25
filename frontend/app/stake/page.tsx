@@ -166,6 +166,17 @@ export default function StakePage() {
     loadWalletData();
   }, [loadWalletData]);
 
+  // Auto-load portfolio when wallet connects
+  useEffect(() => {
+    if (!wallet) { setPortfolio(null); return; }
+    setPortLoading(true);
+    fetch(`/api/onchain/wallet/${wallet}/portfolio`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setPortfolio(data); })
+      .catch(() => {})
+      .finally(() => setPortLoading(false));
+  }, [wallet]);
+
   // Load staking history when wallet changes
   useEffect(() => {
     if (!wallet) { setHistory([]); return; }
