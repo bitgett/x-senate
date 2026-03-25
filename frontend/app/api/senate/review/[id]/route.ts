@@ -1,3 +1,4 @@
+export const maxDuration = 60;
 import { NextRequest } from "next/server";
 import { dbGetProposal, dbUpdateProposal, dbSaveVote } from "@/lib/db";
 import { runSenateStreaming } from "@/lib/agents";

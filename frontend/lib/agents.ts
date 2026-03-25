@@ -25,7 +25,7 @@ const KEYWORD_THRESHOLD = 5;
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY ?? process.env.AI_Governance;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
-  return new Anthropic({ apiKey });
+  return new Anthropic({ apiKey, timeout: 25_000 }); // 25s hard timeout
 }
 
 export async function claudeComplete(system: string, user: string, maxTokens = 2000): Promise<string> {

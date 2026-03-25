@@ -52,8 +52,14 @@ export async function fetchProposal(id: string) {
 }
 
 export async function runSentinelScan() {
-  const res = await fetch(`${BASE}/api/proposals/sentinel/scan`, { method: "POST" });
-  if (!res.ok) throw new Error("Sentinel scan failed");
+  const res = await fetch(`${BASE}/api/proposals/sentinel/scan`, {
+    method: "POST",
+    signal: AbortSignal.timeout(55_000), // 55s client-side abort
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: `Server error ${res.status}` }));
+    throw new Error(err.detail ?? "Sentinel scan failed");
+  }
   return res.json();
 }
 

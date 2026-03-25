@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { runSentinelScan } from "@/lib/agents";
 import { dbCreateProposal, initSchema } from "@/lib/db";
 
+export const maxDuration = 60; // Vercel Pro: allow up to 60s for Claude
+
 export async function POST(_: NextRequest) {
   try {
     await initSchema();

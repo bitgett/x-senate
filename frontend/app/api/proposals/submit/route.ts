@@ -1,3 +1,4 @@
+export const maxDuration = 60;
 /**
  * POST /api/proposals/submit
  *

@@ -1,3 +1,4 @@
+export const maxDuration = 60;
 import { NextRequest, NextResponse } from "next/server";
 import { dbGetProposal, dbUpdateProposal } from "@/lib/db";
 import { v4 as uuidv4 } from "uuid";

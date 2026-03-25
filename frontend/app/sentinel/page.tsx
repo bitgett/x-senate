@@ -75,8 +75,11 @@ export default function SentinelPage() {
     try {
       const data = await runSentinelScan();
       setResult(data);
-    } catch {
-      setError("Scan failed — is the backend running?");
+    } catch (e: any) {
+      const msg = e?.name === "TimeoutError" || e?.message?.includes("timeout")
+        ? "Scan timed out — Claude is taking too long. Try again in a moment."
+        : (e?.message ?? "Scan failed");
+      setError(msg);
     } finally {
       setScanning(false);
     }
