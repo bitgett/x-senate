@@ -28,13 +28,15 @@ export async function GET() {
     };
 
     if (priceData.code === "0" && priceData.data?.[0]) {
-      results.ETH = priceData.data[0]; // native OKB on X Layer
+      results.OKB = priceData.data[0]; // native OKB on X Layer
     }
 
     if (klineData.code === "0" && klineData.data?.length >= 2) {
       const kline = klineData.data;
-      const latestClose  = parseFloat(kline[0][4]);
-      const prevClose    = parseFloat(kline[kline.length - 1][4]);
+      // v6 candles return objects {ts,o,h,l,c,...}; v5 returns arrays
+      const getClose = (k: any) => parseFloat(k?.c ?? k?.[4] ?? "0");
+      const latestClose = getClose(kline[0]);
+      const prevClose   = getClose(kline[kline.length - 1]);
       if (latestClose && prevClose) {
         results.price_change_24h_pct = parseFloat(
           ((latestClose - prevClose) / prevClose * 100).toFixed(2)

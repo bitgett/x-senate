@@ -140,10 +140,12 @@ export default function SentinelPage() {
       {/* ── Market & Gas strip ── */}
       {(market || gas) && (
         <div className="flex flex-wrap gap-2 text-xs">
-          {market?.ETH?.price && (
+          {(market?.OKB?.price || market?.ETH?.price) && (
             <div className="flex items-center gap-1.5 border border-gray-800/60 rounded-full px-3 py-1.5">
-              <span className="text-gray-500">ETH</span>
-              <span className="text-white font-semibold">${Number(market.ETH.price).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+              <span className="text-gray-500">OKB</span>
+              <span className="text-white font-semibold">
+                ${Number((market.OKB ?? market.ETH).price).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              </span>
               {market.price_change_24h_pct !== undefined && (
                 <span className={`font-medium ${market.price_change_24h_pct >= 0 ? "text-green-400" : "text-red-400"}`}>
                   {market.price_change_24h_pct > 0 ? "+" : ""}{Number(market.price_change_24h_pct).toFixed(2)}%
