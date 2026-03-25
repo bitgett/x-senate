@@ -23,7 +23,7 @@ export default function RootLayout({
             <span className="text-xs font-normal text-gray-500 ml-1">Agentic Governance</span>
           </Link>
           <div className="flex items-center gap-6 text-sm text-gray-400">
-            <Link href="/" className="hover:text-white transition-colors">Proposals</Link>
+            <Link href="/app" className="hover:text-white transition-colors">Proposals</Link>
             <Link href="/sentinel" className="hover:text-white transition-colors">Sentinel</Link>
             <Link href="/agents" className="hover:text-white transition-colors">Agents</Link>
             <Link href="/projects" className="hover:text-white transition-colors">🗂️ Projects</Link>

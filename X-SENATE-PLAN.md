@@ -122,9 +122,9 @@ Each agent is powered by `claude-sonnet-4-6` with a distinct system prompt that 
 | Tier | APY | VP Multiplier | Lock Period | PoP Qualification |
 |---|---|---|---|---|
 | **Flexible** | 5% | 1.0x | None | Must actively vote or delegate |
-| **Lock30** | 10% | 1.5x | 30 days | Automatic |
-| **Lock90** | 20% | 2.0x | 90 days | Automatic |
-| **Lock180** | 35% | 3.0x | 180 days | Automatic |
+| **Lock30** | 10% | 1.1x | 30 days | Automatic |
+| **Lock90** | 20% | 1.3x | 90 days | Automatic |
+| **Lock180** | 35% | 1.5x | 180 days | Automatic |
 
 - **Position-based:** One wallet can hold multiple positions across different tiers simultaneously
 - **Per-second accrual:** Rewards accumulate continuously, claimable at any time
@@ -141,8 +141,11 @@ Lock30, Lock90, and Lock180 stakers automatically qualify — commitment is the 
 ### Voting Power (VP)
 ```
 Effective VP = Staked Amount × Tier Multiplier
-Example: 1,000 XSEN in Lock90 → 2,000 VP
+Example: 1,000 XSEN in Lock90 → 1,300 VP
+Example: 1,000 XSEN in Lock180 → 1,500 VP (maximum)
 ```
+
+**Design rationale:** Multipliers are intentionally modest (max 1.5x). Long-term staking is rewarded, but governance power should reflect economic stake, not just lock duration. A 3x multiplier would let a small long-term staker outvote a large short-term holder, which distorts incentives.
 
 ### Snapshot VP — Flash-Stake Protection
 When a proposal is registered, the governor calls `snapshotForProposal()` on the staking contract. This records each agent's current delegated VP at that moment. All voting uses the **snapshot values** — not current live values. Staking or unstaking after proposal creation has zero effect on that vote outcome.
@@ -236,6 +239,26 @@ isProjectActive(projectId)
 
 ---
 
+## Manual Proposal Submission
+
+Beyond the AI-automated Sentinel scanner, **any token holder can submit a proposal manually** — but it goes through a Sentinel gate before being saved.
+
+**Flow:**
+1. User fills in: title, summary, motivation, proposed action, potential risks
+2. `POST /api/proposals/submit` calls Sentinel AI for feasibility review
+3. Sentinel scores 0–100 and decides `approved: true/false`
+4. **Rejected:** 422 response with score, feedback, concerns, and improvement suggestions — proposal is not saved
+5. **Approved:** proposal saved as `Draft` status, returned to user with `threshold_required_xsen: 1000`
+6. User stakes at least 1,000 XSEN, then calls `registerProposal()` on-chain to advance to InSenate
+
+**Staking threshold enforcement:**
+- Off-chain: `GET /api/proposals/submit` returns the current threshold so the UI can warn users
+- On-chain: `XSenateGovernor.registerProposal()` checks `getEffectiveVP(msg.sender) >= proposalThreshold` against the project's staking contract before accepting
+
+This prevents spam while keeping governance permissionless — anyone can propose, but they must have skin in the game.
+
+---
+
 ## Multi-Tenant Platform
 
 Any project on X Layer can join:
@@ -260,7 +283,8 @@ The 1,000 XSEN fee flows to the XSEN staking ecosystem fund, which:
 
 | Route | Description | Status |
 |---|---|---|
-| `/` | Dashboard — proposal feed, platform stats, project count | ✅ Complete |
+| `/` | Landing page — animated intro, Genesis 5 showcase, platform stats | ✅ Complete |
+| `/app` | Dashboard — proposal feed, submit modal, project count | ✅ Complete |
 | `/proposals/[id]` | Proposal detail — senate voting, relay debate, execution | ✅ Complete |
 | `/proposals/[id]/senate` | Live senate vote stream (SSE) | ✅ Complete |
 | `/proposals/[id]/debate` | Relay debate stream (SSE) | ✅ Complete |
@@ -279,6 +303,7 @@ The 1,000 XSEN fee flows to the XSEN staking ecosystem fund, which:
 |---|---|---|
 | `/api/proposals` | GET, POST | List proposals, create proposal |
 | `/api/proposals/[id]` | GET, DELETE | Single proposal CRUD |
+| `/api/proposals/submit` | GET, POST | Manual proposal submission — Sentinel AI gate |
 | `/api/proposals/sentinel/scan` | POST | Run Sentinel AI scan |
 | `/api/senate/review/[id]` | POST | Trigger senate vote (SSE stream) |
 | `/api/senate/votes/[id]` | GET | Agent vote results |
@@ -312,8 +337,11 @@ The 1,000 XSEN fee flows to the XSEN staking ecosystem fund, which:
 | **Multi-tenant** | Registry contract, per-project governance routing |
 | **Database** | Neon Postgres schema — proposals, agent_votes, debate_turns |
 | **Deployment** | Vercel production deployment live at x-senate.vercel.app |
-| **Documentation** | README, architecture docs, agent personas |
-| **Bug Fixes** | Debate approval logic, staking API/UI alignment, TypeScript targets |
+| **Landing Page** | Animated particle canvas, Genesis 5 showcase, animated counters, CTA |
+| **Manual Proposals** | `/api/proposals/submit` with Sentinel AI gate — score, feedback, rejection flow |
+| **Proposal Threshold** | 1,000 XSEN staking requirement enforced off-chain (API) + on-chain (Governor) |
+| **Documentation** | README, architecture docs, X-SENATE-PLAN.md |
+| **Bug Fixes** | Debate approval logic, staking API/UI alignment, TypeScript targets, NeonDB types |
 
 ---
 
