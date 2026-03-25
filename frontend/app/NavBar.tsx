@@ -2,29 +2,38 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-// X Layer hexagonal logo SVG
-function XLayerLogo({ size = 20 }: { size?: number }) {
+// X Layer grid-X logo (matches OKX / X Layer brand mark)
+function XLayerLogo({ size = 20, color = "url(#xlGrad)" }: { size?: number; color?: string }) {
+  // 5×5 grid forming an X pattern
+  const cells: [number, number][] = [
+    [0,0],[1,0],[3,0],[4,0],
+    [0,1],[4,1],
+    [2,2],
+    [0,3],[4,3],
+    [0,4],[1,4],[3,4],[4,4],
+  ];
+  const s = size / 5;
+  const gap = s * 0.18;
+  const cell = s - gap;
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <path
-        d="M12 2L21 7V17L12 22L3 17V7L12 2Z"
-        stroke="url(#xlGrad)"
-        strokeWidth="1.5"
-        fill="none"
-      />
-      <path
-        d="M8 9L12 12L16 9M8 15L12 12L16 15"
-        stroke="url(#xlGrad)"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} fill="none">
       <defs>
-        <linearGradient id="xlGrad" x1="3" y1="2" x2="21" y2="22" gradientUnits="userSpaceOnUse">
+        <linearGradient id="xlGrad" x1="0" y1="0" x2={size} y2={size} gradientUnits="userSpaceOnUse">
           <stop stopColor="#60a5fa" />
           <stop offset="1" stopColor="#a78bfa" />
         </linearGradient>
       </defs>
+      {cells.map(([col, row]) => (
+        <rect
+          key={`${col}-${row}`}
+          x={col * s + gap / 2}
+          y={row * s + gap / 2}
+          width={cell}
+          height={cell}
+          rx={cell * 0.15}
+          fill={color}
+        />
+      ))}
     </svg>
   );
 }
