@@ -6,6 +6,8 @@ interface IXSenateStaking {
     function markDirectVote(address voter) external;
     function getVotingPower(address staker) external view returns (uint256);
     function getEffectiveVP(address staker) external view returns (uint256);
+    function snapshotForProposal(string memory proposalId) external;
+    function getSnapshotVP(string memory proposalId, string memory agentName) external view returns (uint256);
 }
 
 interface IXSenateRegistry {
@@ -227,6 +229,14 @@ contract XSenateGovernor {
             totalDelegatedVP: 0
         });
         proposalIds.push(proposalId);
+
+        // Snapshot agent VP at proposal creation — prevents flash-stake attacks
+        if (address(registry) != address(0)) {
+            address stakingAddr = registry.getStakingForProject(projectId);
+            if (stakingAddr != address(0)) {
+                IXSenateStaking(stakingAddr).snapshotForProposal(proposalId);
+            }
+        }
 
         emit ProposalRegistered(proposalId, projectId, title, msg.sender, block.timestamp);
     }
