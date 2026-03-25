@@ -111,17 +111,24 @@ export default function StakePage() {
   const [history, setHistory]     = useState<any[]>([]);
   const [histLoading, setHistLoad] = useState(false);
 
+  // Wallet portfolio (OKX Wallet API)
+  const [portfolio, setPortfolio]     = useState<any>(null);
+  const [portLoading, setPortLoading] = useState(false);
+  const [gas, setGas]                 = useState<any>(null);
+
   useEffect(() => {
     Promise.all([
       fetch("/api/staking/tiers").then(r => r.ok ? r.json() : null),
       fetch("/api/staking/totals").then(r => r.ok ? r.json() : null),
       fetch("/api/staking/leaderboard?limit=5").then(r => r.ok ? r.json() : null),
       fetch("/api/staking/epoch").then(r => r.ok ? r.json() : null),
-    ]).then(([t, tot, lb, ep]) => {
+      fetch("/api/onchain/gas").then(r => r.ok ? r.json() : null),
+    ]).then(([t, tot, lb, ep, g]) => {
       setTiers(t);
       setTotals(tot);
       setLb(lb?.leaderboard ?? []);
       setEpoch(ep);
+      setGas(g);
     });
   }, []);
 
@@ -438,6 +445,18 @@ export default function StakePage() {
                 >
                   {staking ? "Processing..." : wallet ? `Stake ${TIER_INFO[selectedTier].name}` : "Connect Wallet to Stake"}
                 </button>
+
+                {/* Gas prices */}
+                {gas?.gas_prices && (
+                  <div className="flex items-center justify-between text-[11px] text-gray-600 pt-1">
+                    <span>X Layer Gas</span>
+                    <div className="flex gap-3">
+                      {["normal", "fast", "rapid"].map(s => gas.gas_prices[s] && (
+                        <span key={s}><span className="capitalize">{s}</span> <span className="text-gray-400 font-mono">{gas.gas_prices[s]}</span> Gwei</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -728,6 +747,62 @@ export default function StakePage() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                </div>
+
+                {/* Wallet Portfolio */}
+                <div className="border border-gray-800/60 rounded-2xl overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-800/40 flex items-center justify-between">
+                    <h2 className="font-semibold text-white text-sm">X Layer Portfolio</h2>
+                    <span className="text-[10px] text-purple-400 bg-purple-900/20 border border-purple-800/30 rounded-full px-2 py-0.5">OKX Wallet API</span>
+                  </div>
+                  <div className="p-5">
+                    {portLoading ? (
+                      <div className="text-xs text-gray-600 text-center py-4">Fetching portfolio...</div>
+                    ) : portfolio ? (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-xs text-gray-500">Total Value on X Layer</div>
+                            <div className="text-2xl font-black text-white">${Number(portfolio.total_usd_value || 0).toFixed(2)}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs text-gray-500">Estimated VP</div>
+                            <div className="text-xl font-black text-purple-300">{Number(portfolio.total_usd_value || 0).toFixed(0)}</div>
+                          </div>
+                        </div>
+                        {portfolio.tokens?.length > 0 && (
+                          <div className="space-y-1.5 pt-2 border-t border-gray-800/60">
+                            {portfolio.tokens.slice(0, 5).map((t: any, i: number) => (
+                              <div key={i} className="flex justify-between text-xs">
+                                <span className="text-gray-400">{t.symbol || "—"}</span>
+                                <span className="text-gray-300 font-mono">${Number(t.usd_value || 0).toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="text-[10px] text-gray-700 pt-1">Powered by OKX OnchainOS Wallet API · X Layer</div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="text-xs text-gray-600">View any wallet&apos;s X Layer holdings and voting power estimate</div>
+                        <button
+                          onClick={async () => {
+                            if (!wallet) return;
+                            setPortLoading(true);
+                            try {
+                              const res = await fetch(`/api/onchain/wallet/${wallet}/portfolio`);
+                              const data = await res.json();
+                              setPortfolio(data);
+                            } catch {}
+                            setPortLoading(false);
+                          }}
+                          className="shrink-0 text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 px-4 py-2 rounded-lg transition-colors"
+                        >
+                          Load Portfolio
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 

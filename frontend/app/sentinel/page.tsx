@@ -48,14 +48,20 @@ export default function SentinelPage() {
   const [proposals, setProposals] = useState<any[]>([]);
   const [totals, setTotals]       = useState<any>(null);
   const [propsLoading, setPropsLoad] = useState(true);
+  const [market, setMarket]       = useState<any>(null);
+  const [gas, setGas]             = useState<any>(null);
 
   useEffect(() => {
     Promise.all([
       fetch("/api/proposals").then(r => r.ok ? r.json() : []).catch(() => []),
       fetch("/api/staking/totals").then(r => r.ok ? r.json() : null).catch(() => null),
-    ]).then(([props, tot]) => {
+      fetch("/api/onchain/market/summary").then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch("/api/onchain/gas").then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([props, tot, mkt, g]) => {
       setProposals(Array.isArray(props) ? props : []);
       setTotals(tot);
+      setMarket(mkt);
+      setGas(g);
     }).finally(() => setPropsLoad(false));
   }, []);
 
@@ -120,6 +126,32 @@ export default function SentinelPage() {
           ) : "⚡ Run Sentinel Scan"}
         </button>
       </div>
+
+      {/* ── Market & Gas strip ── */}
+      {(market || gas) && (
+        <div className="flex flex-wrap gap-2 text-xs">
+          {market?.ETH?.price && (
+            <div className="flex items-center gap-1.5 border border-gray-800/60 rounded-full px-3 py-1.5">
+              <span className="text-gray-500">ETH</span>
+              <span className="text-white font-semibold">${Number(market.ETH.price).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+              {market.price_change_24h_pct !== undefined && (
+                <span className={`font-medium ${market.price_change_24h_pct >= 0 ? "text-green-400" : "text-red-400"}`}>
+                  {market.price_change_24h_pct > 0 ? "+" : ""}{Number(market.price_change_24h_pct).toFixed(2)}%
+                </span>
+              )}
+            </div>
+          )}
+          {gas?.gas_prices && ["normal", "fast", "rapid"].map((s) => gas.gas_prices[s] && (
+            <div key={s} className="flex items-center gap-1.5 border border-gray-800/60 rounded-full px-3 py-1.5">
+              <span className="text-gray-600 capitalize">{s}</span>
+              <span className="text-gray-300 font-mono">{gas.gas_prices[s]} Gwei</span>
+            </div>
+          ))}
+          <div className="flex items-center gap-1.5 border border-purple-800/30 rounded-full px-3 py-1.5 text-purple-500">
+            X Layer · chainId 196
+          </div>
+        </div>
+      )}
 
       {/* ── Protocol Stats ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
