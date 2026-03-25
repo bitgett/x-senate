@@ -14,9 +14,9 @@ interface IXToken {
  *
  * TIER TABLE:
  *  Flexible  | no lock  | 5%  APY | 1.0x VP
- *  Lock30    | 30 days  | 10% APY | 1.5x VP
- *  Lock90    | 90 days  | 20% APY | 2.0x VP
- *  Lock180   | 180 days | 35% APY | 3.0x VP
+ *  Lock30    | 30 days  | 10% APY | 1.1x VP
+ *  Lock90    | 90 days  | 20% APY | 1.3x VP
+ *  Lock180   | 180 days | 35% APY | 1.5x VP  (max)
  *
  * AGENT SYSTEM:
  *  - Genesis 5: platform agents (no creator reward)
