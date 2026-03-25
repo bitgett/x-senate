@@ -2,37 +2,77 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-// X Layer grid-X logo — each instance needs a unique gradient id to avoid SVG conflicts
-function XLayerLogo({ size = 20, gradId = "xlG0", bright = false }: { size?: number; gradId?: string; bright?: boolean }) {
-  const cells: [number, number][] = [
+/**
+ * X Layer logo — grid X pattern with two vertical bars on the right.
+ * Based on the OKX / X Layer brand mark.
+ *
+ *  ■■ ·· ■■  | ‖
+ *  ■■ ·· ■■  | ‖
+ *  ·· ■■ ··  | ‖
+ *  ·· ■■ ··
+ *  ■■ ·· ■■  | ‖
+ *  ■■ ·· ■■  | ‖
+ */
+function XLayerLogo({
+  height = 24,
+  color = "#ffffff",
+  gradStart,
+  gradEnd,
+  gradId,
+}: {
+  height?: number;
+  color?: string;
+  gradStart?: string;
+  gradEnd?: string;
+  gradId?: string;
+}) {
+  const unit  = height / 6;        // 6 rows
+  const gap   = unit * 0.16;
+  const sq    = unit - gap;
+  const r     = sq * 0.14;         // corner radius
+
+  // cells for the X pattern [col, row]
+  const xCells: [number, number][] = [
     [0,0],[1,0],[3,0],[4,0],
-    [0,1],[4,1],
-    [2,2],
-    [0,3],[4,3],
+    [0,1],[1,1],[3,1],[4,1],
+    [1,2],[2,2],[3,2],
+    [1,3],[2,3],[3,3],
     [0,4],[1,4],[3,4],[4,4],
+    [0,5],[1,5],[3,5],[4,5],
   ];
-  const s = size / 5;
-  const gap = s * 0.18;
-  const cell = s - gap;
+
+  const fill = gradId ? `url(#${gradId})` : color;
+  const barX1 = 5.8 * unit;
+  const barX2 = 7.0 * unit;
+  const barW1 = sq;
+  const barW2 = sq * 0.65;
+  const totalW = barX2 + barW2 + gap;
+
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} fill="none">
-      <defs>
-        <linearGradient id={gradId} x1="0" y1="0" x2={size} y2={size} gradientUnits="userSpaceOnUse">
-          <stop stopColor={bright ? "#93c5fd" : "#60a5fa"} />
-          <stop offset="1" stopColor={bright ? "#c4b5fd" : "#a78bfa"} />
-        </linearGradient>
-      </defs>
-      {cells.map(([col, row]) => (
+    <svg width={totalW} height={height} viewBox={`0 0 ${totalW} ${height}`} fill="none">
+      {gradId && gradStart && gradEnd && (
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2={totalW} y2={height} gradientUnits="userSpaceOnUse">
+            <stop stopColor={gradStart} />
+            <stop offset="1" stopColor={gradEnd} />
+          </linearGradient>
+        </defs>
+      )}
+
+      {/* X pattern */}
+      {xCells.map(([col, row]) => (
         <rect
           key={`${col}-${row}`}
-          x={col * s + gap / 2}
-          y={row * s + gap / 2}
-          width={cell}
-          height={cell}
-          rx={cell * 0.15}
-          fill={`url(#${gradId})`}
+          x={col * unit + gap / 2}
+          y={row * unit + gap / 2}
+          width={sq} height={sq} rx={r}
+          fill={fill}
         />
       ))}
+
+      {/* Right vertical bars */}
+      <rect x={barX1} y={gap / 2} width={barW1} height={height - gap} rx={r} fill={fill} />
+      <rect x={barX2} y={gap / 2} width={barW2} height={height - gap} rx={r * 0.8} fill={fill} />
     </svg>
   );
 }
@@ -57,11 +97,15 @@ export default function NavBar() {
 
         {/* ── Logo ── */}
         <Link href="/" className="flex items-center gap-3 group">
-          {/* X Layer grid logo */}
           <div className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-gray-900 border border-gray-700/60 group-hover:border-purple-500/50 transition-all overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-purple-600/10 group-hover:from-blue-600/20 group-hover:to-purple-600/20 transition-all" />
-            <div className="relative">
-              <XLayerLogo size={22} gradId="xlLogo" />
+            <div className="relative scale-75">
+              <XLayerLogo
+                height={24}
+                gradStart="#60a5fa"
+                gradEnd="#a78bfa"
+                gradId="xlNavLogo"
+              />
             </div>
           </div>
           <div className="flex flex-col leading-tight">
@@ -85,13 +129,18 @@ export default function NavBar() {
                 }`}
               >
                 {item.icon && (
-                  <span className={`transition-all ${isActive ? "opacity-100" : "opacity-70 group-hover:opacity-100"}`}>
-                    <XLayerLogo size={13} gradId={`xlNav-${item.href}`} bright={isActive} />
+                  <span className={`transition-opacity ${isActive ? "opacity-100" : "opacity-60 group-hover:opacity-100"}`}>
+                    <XLayerLogo
+                      height={13}
+                      gradStart={isActive ? "#93c5fd" : "#60a5fa"}
+                      gradEnd={isActive ? "#c4b5fd" : "#a78bfa"}
+                      gradId={`xlNav${item.href.replace(/\//g, "")}`}
+                    />
                   </span>
                 )}
                 <span>{item.label}</span>
                 {item.num && (
-                  <span className={`text-[9px] font-mono ${isActive ? "text-purple-400" : "text-gray-600 group-hover:text-gray-400"} transition-colors`}>
+                  <span className={`text-[9px] font-mono transition-colors ${isActive ? "text-purple-400" : "text-gray-600 group-hover:text-gray-400"}`}>
                     {item.num}
                   </span>
                 )}
@@ -114,3 +163,6 @@ export default function NavBar() {
     </nav>
   );
 }
+
+// Export for reuse in Footer etc.
+export { XLayerLogo };

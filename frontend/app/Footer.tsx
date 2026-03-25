@@ -1,31 +1,4 @@
-// X Layer grid-X logo (matches OKX / X Layer brand mark)
-function XLayerLogoMono({ size = 20 }: { size?: number }) {
-  const cells: [number, number][] = [
-    [0,0],[1,0],[3,0],[4,0],
-    [0,1],[4,1],
-    [2,2],
-    [0,3],[4,3],
-    [0,4],[1,4],[3,4],[4,4],
-  ];
-  const s = size / 5;
-  const gap = s * 0.18;
-  const cell = s - gap;
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} fill="none">
-      {cells.map(([col, row]) => (
-        <rect
-          key={`${col}-${row}`}
-          x={col * s + gap / 2}
-          y={row * s + gap / 2}
-          width={cell}
-          height={cell}
-          rx={cell * 0.15}
-          fill="currentColor"
-        />
-      ))}
-    </svg>
-  );
-}
+import { XLayerLogo } from "./NavBar";
 
 export default function Footer() {
   return (
@@ -37,8 +10,8 @@ export default function Footer() {
 
         {/* Left: branding */}
         <div className="flex items-center gap-3">
-          <div className="text-gray-600">
-            <XLayerLogoMono size={22} />
+          <div className="opacity-40">
+            <XLayerLogo height={18} color="#9ca3af" gradId="xlFooter" />
           </div>
           <div className="text-xs leading-snug">
             <p className="text-gray-300 font-semibold tracking-tight">
