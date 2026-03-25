@@ -1,411 +1,384 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { ethers } from "ethers";
 
-const BASE = "";
+const STAKING_ADDRESS = process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS ?? "0x9CD9eF69c4EE176c8115E4BCf6c604Eb46599502";
+const TOKEN_ADDRESS   = process.env.NEXT_PUBLIC_XSEN_TOKEN_ADDRESS   ?? "0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b";
 
-const TIER_COLORS: Record<string, string> = {
-  Flexible: "border-gray-600 bg-gray-900",
-  Lock30:   "border-blue-700 bg-blue-950",
-  Lock90:   "border-purple-700 bg-purple-950",
-  Lock180:  "border-yellow-600 bg-yellow-950",
-};
+const STAKING_ABI = [
+  "function getEffectiveVP(address user) view returns (uint256)",
+  "function getPositions(address user) view returns (tuple(uint256 id, uint256 amount, uint8 tier, uint256 lockEnd, string delegatedAgent, bool active, uint256 accReward)[])",
+  "function delegatePosition(uint256 positionId, string agentName) external",
+  "function stake(uint256 amount, uint8 tier) external",
+  "function claimAllRewards() external",
+];
 
-const TIER_BADGE: Record<string, string> = {
-  Flexible: "bg-gray-700 text-gray-300",
-  Lock30:   "bg-blue-800 text-blue-200",
-  Lock90:   "bg-purple-800 text-purple-200",
-  Lock180:  "bg-yellow-700 text-yellow-200",
-};
+const TOKEN_ABI = [
+  "function balanceOf(address) view returns (uint256)",
+  "function approve(address spender, uint256 amount) external returns (bool)",
+];
 
-const RANK_BADGE: Record<number, string> = {
-  1: "bg-yellow-500/20 text-yellow-300 border border-yellow-600/40",
-  2: "bg-gray-500/20 text-gray-300 border border-gray-500/40",
-  3: "bg-amber-700/20 text-amber-400 border border-amber-700/40",
-  4: "bg-gray-800 text-gray-400",
-  5: "bg-gray-800 text-gray-400",
-};
+const TIER_INFO = [
+  { id: 0, name: "Flexible", days: 0,   apy: 5,  mult: 1.0, color: "border-gray-700 bg-gray-900/50",     badge: "bg-gray-700 text-gray-300" },
+  { id: 1, name: "Lock30",   days: 30,  apy: 10, mult: 1.1, color: "border-blue-700/50 bg-blue-950/30",  badge: "bg-blue-800 text-blue-200" },
+  { id: 2, name: "Lock90",   days: 90,  apy: 20, mult: 1.3, color: "border-purple-700/50 bg-purple-950/30", badge: "bg-purple-800 text-purple-200" },
+  { id: 3, name: "Lock180",  days: 180, apy: 35, mult: 1.5, color: "border-yellow-600/50 bg-yellow-950/30", badge: "bg-yellow-700 text-yellow-200" },
+];
 
-function formatXSEN(val: number): string {
+const GENESIS_AGENTS = [
+  { name: "Guardian",  role: "Security & Risk",       accent: "#3b82f6" },
+  { name: "Merchant",  role: "Economics & ROI",       accent: "#eab308" },
+  { name: "Architect", role: "Technical Feasibility", accent: "#22c55e" },
+  { name: "Diplomat",  role: "Community & Consensus", accent: "#a855f7" },
+  { name: "Populist",  role: "User Voice & Fairness", accent: "#ef4444" },
+];
+
+function fmt(val: number): string {
   if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(2)}M`;
   if (val >= 1_000)     return `${(val / 1_000).toFixed(1)}K`;
   return val.toFixed(2);
 }
 
-function timeUntil(ts: number): string {
-  const now = Math.floor(Date.now() / 1000);
-  if (ts <= now) return "Unlocked";
-  const diff = ts - now;
-  const d = Math.floor(diff / 86400);
-  const h = Math.floor((diff % 86400) / 3600);
-  if (d > 0) return `${d}d ${h}h`;
-  return `${h}h`;
+function shortAddr(addr: string) {
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
 export default function StakePage() {
-  const [tiers, setTiers]         = useState<any>(null);
-  const [epoch, setEpoch]         = useState<any>(null);
-  const [totals, setTotals]       = useState<any>(null);
-  const [leaderboard, setLb]      = useState<any[]>([]);
-  const [walletAddr, setWallet]   = useState("");
+  const [wallet, setWallet]       = useState<string | null>(null);
+  const [xsenBal, setXsenBal]     = useState<number>(0);
+  const [effectiveVP, setVP]      = useState<number>(0);
   const [positions, setPositions] = useState<any[]>([]);
-  const [effectiveVP, setVP]      = useState<any>(null);
-  const [loadingPos, setLoadingPos] = useState(false);
+  const [leaderboard, setLb]      = useState<any[]>([]);
+  const [tiers, setTiers]         = useState<any>(null);
+  const [totals, setTotals]       = useState<any>(null);
+  const [delegating, setDelegating] = useState<string | null>(null);
+  const [txStatus, setTxStatus]   = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
 
+  // Load static data
   useEffect(() => {
     Promise.all([
-      fetch(`${BASE}/api/staking/tiers`).then(r => r.ok ? r.json() : null),
-      fetch(`${BASE}/api/staking/epoch`).then(r => r.ok ? r.json() : null),
-      fetch(`${BASE}/api/staking/totals`).then(r => r.ok ? r.json() : null),
-      fetch(`${BASE}/api/staking/leaderboard?limit=20`).then(r => r.ok ? r.json() : null),
-    ]).then(([t, e, tot, lb]) => {
+      fetch("/api/staking/tiers").then(r => r.ok ? r.json() : null),
+      fetch("/api/staking/totals").then(r => r.ok ? r.json() : null),
+      fetch("/api/staking/leaderboard?limit=5").then(r => r.ok ? r.json() : null),
+    ]).then(([t, tot, lb]) => {
       setTiers(t);
-      setEpoch(e);
       setTotals(tot);
       setLb(lb?.leaderboard ?? []);
     });
   }, []);
 
-  async function lookupPositions() {
-    const addr = walletAddr.trim();
-    if (!addr || addr.length !== 42) return;
-    setLoadingPos(true);
+  const loadWalletData = useCallback(async (address: string) => {
     try {
-      const [posRes, vpRes] = await Promise.all([
-        fetch(`${BASE}/api/staking/positions/${addr}`).then(r => r.ok ? r.json() : null),
-        fetch(`${BASE}/api/staking/vp/${addr}`).then(r => r.ok ? r.json() : null),
+      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const token   = new ethers.Contract(TOKEN_ADDRESS,   TOKEN_ABI,   provider);
+      const staking = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, provider);
+
+      const [bal, vp] = await Promise.all([
+        token.balanceOf(address),
+        staking.getEffectiveVP(address).catch(() => 0n),
       ]);
-      setPositions(posRes?.positions ?? []);
-      setVP(vpRes);
-    } catch {}
-    setLoadingPos(false);
+      setXsenBal(Number(ethers.formatEther(bal)));
+      setVP(Number(ethers.formatEther(vp)));
+
+      try {
+        const pos = await staking.getPositions(address);
+        setPositions(pos.map((p: any) => ({
+          id: Number(p.id),
+          amount: Number(ethers.formatEther(p.amount)),
+          tier: TIER_INFO[Number(p.tier)]?.name ?? "Unknown",
+          tierId: Number(p.tier),
+          lockEnd: Number(p.lockEnd),
+          delegatedAgent: p.delegatedAgent,
+          active: p.active,
+          accReward: Number(ethers.formatEther(p.accReward)),
+        })));
+      } catch { setPositions([]); }
+    } catch (e) { console.error(e); }
+  }, []);
+
+  async function connectWallet() {
+    if (!(window as any).ethereum) {
+      alert("MetaMask not detected. Please install MetaMask.");
+      return;
+    }
+    setConnecting(true);
+    try {
+      // Switch to X Layer
+      try {
+        await (window as any).ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: "0xc4" }], // 196
+        });
+      } catch {
+        await (window as any).ethereum.request({
+          method: "wallet_addEthereumChain",
+          params: [{ chainId: "0xc4", chainName: "X Layer Mainnet", nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 }, rpcUrls: ["https://rpc.xlayer.tech"], blockExplorerUrls: ["https://www.okx.com/web3/explorer/xlayer"] }],
+        });
+      }
+      const accounts = await (window as any).ethereum.request({ method: "eth_requestAccounts" });
+      setWallet(accounts[0]);
+      await loadWalletData(accounts[0]);
+    } catch (e: any) { console.error(e); }
+    setConnecting(false);
   }
 
-  const epochEndMs  = epoch?.end_time ? epoch.end_time * 1000 : null;
-  const epochPct    = epoch
-    ? Math.min(100, ((Date.now() / 1000 - epoch.start_time) / (epoch.end_time - epoch.start_time)) * 100)
-    : 0;
+  async function delegateTo(agentName: string) {
+    if (!wallet || positions.length === 0) return;
+    const activePos = positions.find(p => p.active);
+    if (!activePos) { setTxStatus("No active positions to delegate."); return; }
+
+    setDelegating(agentName);
+    setTxStatus(null);
+    try {
+      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const signer = await provider.getSigner();
+      const staking = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
+      const tx = await staking.delegatePosition(activePos.id, agentName);
+      setTxStatus(`Delegating... TX: ${tx.hash.slice(0, 10)}...`);
+      await tx.wait();
+      setTxStatus(`Delegated to ${agentName}`);
+      await loadWalletData(wallet);
+    } catch (e: any) {
+      setTxStatus(`Error: ${e.message?.slice(0, 80)}`);
+    }
+    setDelegating(null);
+  }
+
+  const currentDelegate = positions.find(p => p.active && p.delegatedAgent)?.delegatedAgent;
 
   return (
-    <div className="max-w-5xl mx-auto space-y-10">
+    <div className="max-w-5xl mx-auto space-y-8">
 
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-white">X-Senate Staking</h1>
-        <p className="text-gray-400 mt-1">
-          Stake XSEN to earn rewards and govern the X-Senate DAO.
-          Lock longer for higher APY and VP multiplier.
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-white">Staking</h1>
+          <p className="text-gray-500 mt-1 text-sm">Stake XSEN · Earn rewards · Delegate VP to AI agents</p>
+        </div>
+
+        {/* Wallet connect */}
+        {wallet ? (
+          <div className="flex items-center gap-3 bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5">
+            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+            <div>
+              <div className="text-xs text-gray-500">Connected</div>
+              <div className="text-sm font-mono text-white">{shortAddr(wallet)}</div>
+            </div>
+            <div className="w-px h-8 bg-gray-700" />
+            <div className="text-right">
+              <div className="text-xs text-gray-500">XSEN Balance</div>
+              <div className="text-sm font-bold text-white">{fmt(xsenBal)}</div>
+            </div>
+            <div className="w-px h-8 bg-gray-700" />
+            <div className="text-right">
+              <div className="text-xs text-gray-500">Voting Power</div>
+              <div className="text-sm font-bold text-purple-300">{fmt(effectiveVP)} VP</div>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={connectWallet}
+            disabled={connecting}
+            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-xl transition-all hover:scale-105"
+            style={{ boxShadow: "0 0 20px rgba(139,92,246,0.3)" }}
+          >
+            {connecting ? (
+              <span className="animate-spin text-lg">◌</span>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/></svg>
+            )}
+            {connecting ? "Connecting..." : "Connect Wallet"}
+          </button>
+        )}
       </div>
 
-      {/* Protocol stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      {/* TX status */}
+      {txStatus && (
+        <div className={`rounded-xl px-4 py-3 text-sm border ${txStatus.startsWith("Error") ? "bg-red-900/20 border-red-700/40 text-red-300" : "bg-green-900/20 border-green-700/40 text-green-300"}`}>
+          {txStatus}
+        </div>
+      )}
+
+      {/* Stats row */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl p-4">
           <div className="text-xs text-gray-500 mb-1">Total Staked</div>
-          <div className="text-xl font-bold text-white">
-            {totals?.total_staked_xsen != null ? formatXSEN(totals.total_staked_xsen) : "—"}
-          </div>
-          <div className="text-xs text-gray-500">XSEN</div>
+          <div className="text-2xl font-bold text-white">{totals?.total_staked_xsen != null ? fmt(totals.total_staked_xsen) : "—"}</div>
+          <div className="text-xs text-gray-600">XSEN</div>
         </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <div className="text-xs text-gray-500 mb-1">Total Eff. VP</div>
-          <div className="text-xl font-bold text-purple-300">
-            {totals?.total_effective_vp_xsen != null ? formatXSEN(totals.total_effective_vp_xsen) : "—"}
-          </div>
-          <div className="text-xs text-gray-500">votes</div>
+        <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl p-4">
+          <div className="text-xs text-gray-500 mb-1">Total Effective VP</div>
+          <div className="text-2xl font-bold text-purple-300">{totals?.total_effective_vp_xsen != null ? fmt(totals.total_effective_vp_xsen) : "—"}</div>
+          <div className="text-xs text-gray-600">votes</div>
         </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <div className="text-xs text-gray-500 mb-1">Epoch Reward Pool</div>
-          <div className="text-xl font-bold text-green-300">
-            {epoch?.reward_pool_xsen != null ? formatXSEN(epoch.reward_pool_xsen) : "—"}
-          </div>
-          <div className="text-xs text-gray-500">XSEN</div>
+        <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl p-4">
+          <div className="text-xs text-gray-500 mb-1">Your Delegation</div>
+          <div className="text-2xl font-bold text-white">{currentDelegate || (wallet ? "None" : "—")}</div>
+          <div className="text-xs text-gray-600">{wallet ? "current agent" : "connect wallet"}</div>
         </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <div className="text-xs text-gray-500 mb-1">Current Epoch</div>
-          <div className="text-xl font-bold text-blue-300">
-            #{epoch?.epoch_id ?? "—"}
+      </div>
+
+      {/* Two-column layout */}
+      <div className="grid md:grid-cols-2 gap-6">
+
+        {/* Left: Staking Tiers */}
+        <div>
+          <h2 className="text-lg font-semibold text-white mb-4">Staking Tiers</h2>
+          <div className="space-y-3">
+            {TIER_INFO.map((t) => (
+              <div key={t.id} className={`border rounded-xl p-4 ${t.color}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${t.badge}`}>{t.name}</span>
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="text-white font-bold">{t.apy}% APY</span>
+                    {t.days > 0 && <span className="text-gray-500 text-xs">{t.days}d lock</span>}
+                  </div>
+                </div>
+                <div className="mb-1 flex items-center justify-between text-xs">
+                  <span className="text-gray-500">VP Multiplier</span>
+                  <span className="font-bold text-purple-300">{t.mult}x</span>
+                </div>
+                <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-purple-600 to-blue-400"
+                    style={{ width: `${((t.mult - 1) / 0.5) * 100}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-[10px] text-gray-700 mt-0.5">
+                  <span>1.0x base</span><span>1.5x max</span>
+                </div>
+              </div>
+            ))}
           </div>
-          {epoch && (
-            <div className="text-xs text-gray-500">
-              {timeUntil(epoch.end_time)} left
+        </div>
+
+        {/* Right: Delegate to Agent */}
+        <div>
+          <h2 className="text-lg font-semibold text-white mb-4">
+            Delegate Voting Power
+            {wallet && <span className="ml-2 text-sm font-normal text-purple-300">{fmt(effectiveVP)} VP available</span>}
+          </h2>
+
+          {!wallet && (
+            <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl p-6 text-center">
+              <div className="text-gray-500 text-sm mb-3">Connect your wallet to delegate VP</div>
+              <button onClick={connectWallet} className="bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+                Connect Wallet
+              </button>
+            </div>
+          )}
+
+          {wallet && (
+            <div className="space-y-3">
+              {GENESIS_AGENTS.map((agent) => {
+                const lb = leaderboard.find(l => l.agent_name === agent.name);
+                const isCurrentDelegate = currentDelegate === agent.name;
+                return (
+                  <div
+                    key={agent.name}
+                    className={`border rounded-xl p-4 transition-all ${
+                      isCurrentDelegate
+                        ? "border-purple-500/50 bg-purple-950/20"
+                        : "border-gray-800/60 bg-gray-900/30 hover:border-gray-700"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        {/* Color dot */}
+                        <div className="w-2 h-8 rounded-full" style={{ backgroundColor: agent.accent }} />
+                        <div>
+                          <div className="font-semibold text-white text-sm">{agent.name}</div>
+                          <div className="text-xs text-gray-500">{agent.role}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {lb && (
+                          <div className="text-right text-xs">
+                            <div className="text-gray-500">{fmt(lb.total_delegated_vp_xsen)} VP</div>
+                            <div className="text-gray-600">{lb.delegator_count} delegators</div>
+                          </div>
+                        )}
+                        {isCurrentDelegate ? (
+                          <span className="text-xs bg-purple-600/30 border border-purple-500/40 text-purple-300 px-3 py-1.5 rounded-lg font-medium">
+                            Delegated
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => delegateTo(agent.name)}
+                            disabled={!!delegating || positions.filter(p => p.active).length === 0}
+                            className="text-xs bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg transition-colors font-medium"
+                          >
+                            {delegating === agent.name ? "..." : "Delegate"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {positions.filter(p => p.active).length === 0 && (
+                <p className="text-xs text-gray-600 mt-2">Stake XSEN first to delegate voting power.</p>
+              )}
             </div>
           )}
         </div>
       </div>
 
-      {/* Epoch progress bar */}
-      {epoch && (
+      {/* My Positions */}
+      {wallet && positions.length > 0 && (
         <div>
-          <div className="flex justify-between text-xs text-gray-500 mb-1">
-            <span>Epoch #{epoch.epoch_id} progress</span>
-            <span>{epochPct.toFixed(0)}%</span>
-          </div>
-          <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-purple-600 to-blue-500 rounded-full transition-all"
-              style={{ width: `${epochPct}%` }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Tier cards */}
-      <div>
-        <h2 className="text-xl font-semibold text-white mb-4">Staking Tiers</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {tiers?.tiers?.map((t: any) => (
-            <div
-              key={t.id}
-              className={`border rounded-xl p-5 flex flex-col gap-3 ${TIER_COLORS[t.name] ?? "border-gray-700 bg-gray-900"}`}
-            >
-              <div className="flex items-center justify-between">
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${TIER_BADGE[t.name]}`}>
-                  {t.name}
-                </span>
-                {t.pop_auto && (
-                  <span className="text-xs text-green-400 bg-green-900/40 border border-green-700/40 rounded-full px-2 py-0.5">
-                    Auto-PoP
-                  </span>
-                )}
-              </div>
-              <div>
-                <div className="text-3xl font-bold text-white">{t.apy_pct}%</div>
-                <div className="text-xs text-gray-400">Base APY</div>
-              </div>
-              {/* VP Multiplier bar */}
-              <div>
-                <div className="flex items-center justify-between text-xs mb-1">
-                  <span className="text-gray-500">VP Multiplier</span>
-                  <span className="font-bold text-purple-300">{t.vp_mult}x</span>
-                </div>
-                <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-purple-600 to-blue-400"
-                    style={{ width: `${((t.vp_mult - 1) / 0.5) * 100}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-[10px] text-gray-700 mt-0.5">
-                  <span>1.0x</span><span>1.5x</span>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <div className="text-gray-500">Lock Period</div>
-                  <div className="font-semibold text-white">
-                    {t.lock_days === 0 ? "None" : `${t.lock_days}d`}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-gray-500">Early Exit</div>
-                  <div className="font-semibold text-white">{t.lock_days === 0 ? "—" : "Forfeit"}</div>
-                </div>
-              </div>
-              <div className="text-xs text-gray-500 border-t border-gray-700/50 pt-2">
-                {t.lock_days === 0
-                  ? "Must vote or delegate to earn rewards."
-                  : `Early exit: ${t.early_exit}.`}
-              </div>
-            </div>
-          ))}
-        </div>
-        {tiers && (
-          <p className="text-xs text-gray-500 mt-3">
-            Min stake: {tiers.min_stake_xsen} {tiers.token_symbol} · {tiers.pop_description}
-          </p>
-        )}
-      </div>
-
-      {/* Wallet lookup */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-        <h2 className="text-xl font-semibold text-white mb-4">My Stake Positions</h2>
-        <div className="flex gap-3">
-          <input
-            type="text"
-            placeholder="0x... wallet address"
-            value={walletAddr}
-            onChange={e => setWallet(e.target.value)}
-            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
-          />
-          <button
-            onClick={lookupPositions}
-            disabled={loadingPos}
-            className="bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold px-5 py-2 rounded-lg disabled:opacity-50 transition-colors"
-          >
-            {loadingPos ? "Loading..." : "Lookup"}
-          </button>
-        </div>
-
-        {/* VP summary */}
-        {effectiveVP && (
-          <div className="mt-4 flex gap-6">
-            <div>
-              <div className="text-xs text-gray-500">Effective Voting Power</div>
-              <div className="text-2xl font-bold text-purple-300">
-                {formatXSEN(effectiveVP.effective_vp_xsen ?? 0)} VP
-              </div>
-            </div>
-            <div>
-              <div className="text-xs text-gray-500">Active Positions</div>
-              <div className="text-2xl font-bold text-white">
-                {positions.filter(p => p.active).length}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Position list */}
-        {positions.length > 0 && (
-          <div className="mt-5 space-y-3">
+          <h2 className="text-lg font-semibold text-white mb-4">My Positions</h2>
+          <div className="grid sm:grid-cols-2 gap-4">
             {positions.map(p => (
-              <div
-                key={p.id}
-                className={`border rounded-lg p-4 ${p.active ? "border-gray-700 bg-gray-800/50" : "border-gray-800 bg-gray-900/50 opacity-50"}`}
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-white text-sm">
-                        Position #{p.id}
-                      </span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TIER_BADGE[p.tier] ?? "bg-gray-700 text-gray-300"}`}>
-                        {p.tier}
-                      </span>
-                      {!p.active && (
-                        <span className="text-xs text-gray-500 bg-gray-800 rounded-full px-2 py-0.5">Closed</span>
-                      )}
-                    </div>
-                    <div className="text-2xl font-bold text-white mt-1">
-                      {formatXSEN(p.amount_xsen)} XSEN
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xs text-gray-500">Accrued Reward</div>
-                    <div className="text-lg font-semibold text-green-300">
-                      +{formatXSEN(p.acc_reward_xsen)} XSEN
-                    </div>
-                  </div>
+              <div key={p.id} className={`border rounded-xl p-4 ${p.active ? "border-gray-700 bg-gray-900/50" : "border-gray-800 opacity-50"}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-gray-500">Position #{p.id}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${TIER_INFO[p.tierId]?.badge ?? "bg-gray-700 text-gray-300"}`}>{p.tier}</span>
                 </div>
-
-                <div className="grid grid-cols-3 gap-4 mt-3 text-xs">
-                  <div>
-                    <div className="text-gray-500">Lock Expires</div>
-                    <div className="text-white font-medium">
-                      {p.lock_end > 0 ? timeUntil(p.lock_end) : "No lock"}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-gray-500">Delegated To</div>
-                    <div className="text-white font-medium">
-                      {p.delegated_agent || "Not delegated"}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-gray-500">Staked At</div>
-                    <div className="text-white font-medium">
-                      {new Date(p.staked_at * 1000).toLocaleDateString()}
-                    </div>
-                  </div>
+                <div className="text-xl font-bold text-white">{fmt(p.amount)} XSEN</div>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-gray-500">
+                  <div>Reward: <span className="text-green-300">+{fmt(p.accReward)}</span></div>
+                  <div>Delegate: <span className="text-purple-300">{p.delegatedAgent || "—"}</span></div>
                 </div>
               </div>
             ))}
           </div>
-        )}
-
-        {positions.length === 0 && walletAddr && !loadingPos && (
-          <div className="mt-4 text-sm text-gray-500">
-            No positions found for this address. Stake XSEN via the contract to get started.
-          </div>
-        )}
-
-        {!walletAddr && (
-          <p className="mt-4 text-xs text-gray-600">
-            Enter your wallet address to view your positions, rewards, and VP.
-          </p>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Agent Leaderboard */}
       <div>
-        <h2 className="text-xl font-semibold text-white mb-1">Agent Leaderboard</h2>
-        <p className="text-gray-500 text-sm mb-4">
-          Top agents by delegated voting power. Delegate to earn rewards from the ecosystem fund.
-        </p>
-
-        {leaderboard.length > 0 ? (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-800 text-xs text-gray-500 text-left">
-                  <th className="px-4 py-3 w-16">Rank</th>
-                  <th className="px-4 py-3">Agent</th>
-                  <th className="px-4 py-3 text-right">Delegated VP</th>
-                  <th className="px-4 py-3 text-right">Delegators</th>
-                  <th className="px-4 py-3 text-right">Status</th>
+        <h2 className="text-lg font-semibold text-white mb-4">Agent Leaderboard</h2>
+        <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-800 text-xs text-gray-500 text-left">
+                <th className="px-4 py-3 w-16">Rank</th>
+                <th className="px-4 py-3">Agent</th>
+                <th className="px-4 py-3 text-right">Delegated VP</th>
+                <th className="px-4 py-3 text-right">Delegators</th>
+              </tr>
+            </thead>
+            <tbody>
+              {leaderboard.map((a: any) => (
+                <tr key={a.agent_name} className="border-b border-gray-800/40 hover:bg-gray-800/20 transition-colors">
+                  <td className="px-4 py-3">
+                    <span className="text-xs font-bold text-gray-400">{a.rank_label}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="font-semibold text-white">{a.agent_name}</span>
+                    {a.is_genesis && <span className="ml-2 text-xs text-purple-400 bg-purple-900/30 rounded-full px-1.5 py-0.5">Genesis</span>}
+                    {a.voted_this_epoch && <span className="ml-1 text-xs text-green-400 bg-green-900/30 rounded-full px-1.5 py-0.5">Active</span>}
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono text-purple-300">{fmt(a.total_delegated_vp_xsen)}</td>
+                  <td className="px-4 py-3 text-right text-gray-400">{a.delegator_count}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {leaderboard.map((a: any) => (
-                  <tr key={a.agent_name} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center text-xs font-bold px-2 py-0.5 rounded-full ${RANK_BADGE[a.rank] ?? "bg-gray-800 text-gray-500"}`}>
-                        {a.rank_label || `#${a.rank}`}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="font-semibold text-white">{a.agent_name}</span>
-                      {a.is_genesis && (
-                        <span className="ml-2 text-xs text-purple-400 bg-purple-900/30 rounded-full px-1.5 py-0.5">
-                          Genesis
-                        </span>
-                      )}
-                      {a.voted_this_epoch && (
-                        <span className="ml-1 text-xs text-green-400 bg-green-900/30 rounded-full px-1.5 py-0.5">
-                          voted
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono text-purple-300">
-                      {formatXSEN(a.total_delegated_vp_xsen)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-gray-300">
-                      {a.delegator_count}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {a.is_genesis
-                        ? <span className="text-xs text-gray-500">—</span>
-                        : <span className="text-xs text-green-400">3% creator reward</span>
-                      }
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
-            <div className="text-gray-500 text-sm">
-              {leaderboard.length === 0
-                ? "Contract not deployed yet · Deploy to see leaderboard"
-                : "No agents registered"}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* How to stake (on-chain instructions) */}
-      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-white mb-3">How to Stake</h2>
-        <ol className="space-y-2 text-sm text-gray-400 list-decimal list-inside">
-          <li>Connect your wallet to <span className="text-white">X Layer</span> (chainId 196)</li>
-          <li>Approve the staking contract to spend your XSEN tokens</li>
-          <li>Call <code className="bg-gray-800 px-1 rounded text-purple-300">stake(amount, tier)</code> — tier: 0=Flexible, 1=Lock30, 2=Lock90, 3=Lock180</li>
-          <li>Delegate your position to a Genesis 5 agent with <code className="bg-gray-800 px-1 rounded text-purple-300">delegatePosition(positionId, agentName)</code></li>
-          <li>Claim rewards with <code className="bg-gray-800 px-1 rounded text-purple-300">claimReward(positionId)</code> or <code className="bg-gray-800 px-1 rounded text-purple-300">claimAllRewards()</code></li>
-        </ol>
-        <p className="text-xs text-gray-600 mt-3">
-          Frontend wallet integration (MetaMask/WalletConnect) coming in v0.2.
-          Current version reads on-chain state directly from the contract.
-        </p>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
     </div>
