@@ -137,8 +137,9 @@ export default function GovernancePage() {
       <div className="pb-6 border-b border-gray-800/60">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-600/40 to-blue-600/30 border border-purple-500/30 flex items-center justify-center">
-              <span className="text-2xl font-black text-purple-300">X</span>
+            <div className="w-14 h-14 rounded-2xl overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/xsen-logo.svg" alt="XSEN" className="w-full h-full" />
             </div>
             <div>
               <div className="flex items-center gap-2">
