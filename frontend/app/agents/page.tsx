@@ -106,10 +106,15 @@ const RANK_STYLE: Record<string, { badge: string; icon: string }> = {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function fmt(v: number): string {
-  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M`;
-  if (v >= 1_000)     return `${(v / 1_000).toFixed(1)}K`;
-  return v.toFixed(0);
+function fmt(v: number | string | undefined | null): string {
+  const n = Number(v ?? 0);
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}K`;
+  return n.toFixed(0);
+}
+
+function pct(v: number | string | undefined | null): string {
+  return `${(Number(v ?? 0) * 100).toFixed(0)}%`;
 }
 
 function buildSystemPrompt(cfg: {
@@ -509,7 +514,7 @@ export default function AgentsPage() {
                           <div className="text-[10px] text-gray-600 mt-0.5">Delegated VP</div>
                         </div>
                         <div className="text-center bg-gray-800/40 rounded-lg py-2">
-                          <div className="text-sm font-bold text-white">{(u.participation_rate * 100).toFixed(0)}%</div>
+                          <div className="text-sm font-bold text-white">{pct(u.participation_rate)}</div>
                           <div className="text-[10px] text-gray-600 mt-0.5">Participation</div>
                         </div>
                       </div>
@@ -899,9 +904,9 @@ export default function AgentsPage() {
 
                 <div className="grid grid-cols-3 gap-3">
                   {[
-                    { label: "Delegated VP",    value: fmt(myAgent.delegated_vp),                          color: "text-purple-300" },
-                    { label: "Participation",   value: `${(myAgent.participation_rate * 100).toFixed(0)}%`, color: "text-blue-300" },
-                    { label: "Success Rate",    value: `${(myAgent.proposal_success_rate * 100).toFixed(0)}%`, color: "text-green-300" },
+                    { label: "Delegated VP",    value: fmt(myAgent.delegated_vp),          color: "text-purple-300" },
+                    { label: "Participation",   value: pct(myAgent.participation_rate),     color: "text-blue-300" },
+                    { label: "Success Rate",    value: pct(myAgent.proposal_success_rate),  color: "text-green-300" },
                   ].map(s => (
                     <div key={s.label} className="text-center bg-gray-800/40 rounded-xl py-3">
                       <div className={`text-xl font-black ${s.color}`}>{s.value}</div>
