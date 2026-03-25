@@ -50,6 +50,7 @@ export default function SentinelPage() {
   const [propsLoading, setPropsLoad] = useState(true);
   const [market, setMarket]       = useState<any>(null);
   const [gas, setGas]             = useState<any>(null);
+  const [xsenPrice, setXsenPrice] = useState<number | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -57,11 +58,13 @@ export default function SentinelPage() {
       fetch("/api/staking/totals").then(r => r.ok ? r.json() : null).catch(() => null),
       fetch("/api/onchain/market/summary").then(r => r.ok ? r.json() : null).catch(() => null),
       fetch("/api/onchain/gas").then(r => r.ok ? r.json() : null).catch(() => null),
-    ]).then(([props, tot, mkt, g]) => {
+      fetch("/api/x402/quote").then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([props, tot, mkt, g, quote]) => {
       setProposals(Array.isArray(props) ? props : []);
       setTotals(tot);
       setMarket(mkt);
       setGas(g);
+      if (quote?.xsen_price_usd) setXsenPrice(quote.xsen_price_usd);
     }).finally(() => setPropsLoad(false));
   }, []);
 
@@ -179,7 +182,8 @@ export default function SentinelPage() {
 
           <div className="border border-gray-800/60 rounded-xl p-5 space-y-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-purple-900/30 border border-purple-700/40 flex items-center justify-center font-black text-purple-300 text-sm">X</div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/xsen-logo.svg" alt="XSEN" className="w-10 h-10 rounded-xl" />
               <div>
                 <div className="font-bold text-white">XSEN</div>
                 <div className="text-xs text-gray-500">X Layer Mainnet</div>
@@ -190,7 +194,10 @@ export default function SentinelPage() {
             <div className="space-y-2 text-xs">
               <div className="flex justify-between items-center py-1.5 border-b border-gray-800/60">
                 <span className="text-gray-500">Price</span>
-                <span className="text-gray-400">— (not listed)</span>
+                {xsenPrice
+                  ? <span className="text-white font-semibold">${xsenPrice < 0.01 ? xsenPrice.toFixed(6) : xsenPrice.toFixed(4)}</span>
+                  : <span className="text-gray-600">fetching...</span>
+                }
               </div>
               <div className="flex justify-between items-center py-1.5 border-b border-gray-800/60">
                 <span className="text-gray-500">Total Staked</span>
