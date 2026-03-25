@@ -26,9 +26,9 @@ export default function RootLayout({
             <Link href="/app" className="hover:text-white transition-colors">Proposals</Link>
             <Link href="/sentinel" className="hover:text-white transition-colors">Sentinel</Link>
             <Link href="/agents" className="hover:text-white transition-colors">Agents</Link>
-            <Link href="/projects" className="hover:text-white transition-colors">🗂️ Projects</Link>
-            <Link href="/stake" className="hover:text-white transition-colors">💎 Stake</Link>
-            <Link href="/onchain" className="hover:text-white transition-colors">⛓️ X Layer</Link>
+            <Link href="/projects" className="hover:text-white transition-colors">Projects</Link>
+            <Link href="/stake" className="hover:text-white transition-colors">Stake</Link>
+            <Link href="/onchain" className="hover:text-white transition-colors">X Layer</Link>
             <div className="flex items-center gap-2 bg-gray-900 border border-gray-700 rounded-full px-3 py-1">
               <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
               <span className="text-xs text-gray-300">Genesis 5 Online</span>
