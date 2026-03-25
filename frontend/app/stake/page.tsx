@@ -17,14 +17,12 @@ const TIER_BADGE: Record<string, string> = {
   Lock180:  "bg-yellow-700 text-yellow-200",
 };
 
-const RANK_BADGE: Record<string, string> = {
-  Gold:   "bg-yellow-500 text-black",
-  Silver: "bg-gray-400 text-black",
-  Bronze: "bg-amber-700 text-white",
-};
-
-const RANK_EMOJI: Record<string, string> = {
-  Gold: "🥇", Silver: "🥈", Bronze: "🥉",
+const RANK_BADGE: Record<number, string> = {
+  1: "bg-yellow-500/20 text-yellow-300 border border-yellow-600/40",
+  2: "bg-gray-500/20 text-gray-300 border border-gray-500/40",
+  3: "bg-amber-700/20 text-amber-400 border border-amber-700/40",
+  4: "bg-gray-800 text-gray-400",
+  5: "bg-gray-800 text-gray-400",
 };
 
 function formatXSEN(val: number): string {
@@ -92,7 +90,7 @@ export default function StakePage() {
 
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-white">💎 X-Senate Staking</h1>
+        <h1 className="text-3xl font-bold text-white">X-Senate Staking</h1>
         <p className="text-gray-400 mt-1">
           Stake XSEN to earn rewards and govern the X-Senate DAO.
           Lock longer for higher APY and VP multiplier.
@@ -310,12 +308,11 @@ export default function StakePage() {
         )}
       </div>
 
-      {/* UGA Leaderboard */}
+      {/* Agent Leaderboard */}
       <div>
-        <h2 className="text-xl font-semibold text-white mb-1">UGA Agent Leaderboard</h2>
+        <h2 className="text-xl font-semibold text-white mb-1">Agent Leaderboard</h2>
         <p className="text-gray-500 text-sm mb-4">
-          Top agents by delegated voting power. Delegate to earn bonus APY.
-          Gold (+2%) · Silver (+1.5%) · Bronze (+1%)
+          Top agents by delegated voting power. Delegate to earn rewards from the ecosystem fund.
         </p>
 
         {leaderboard.length > 0 ? (
@@ -323,22 +320,30 @@ export default function StakePage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-800 text-xs text-gray-500 text-left">
-                  <th className="px-4 py-3 w-12">#</th>
+                  <th className="px-4 py-3 w-16">Rank</th>
                   <th className="px-4 py-3">Agent</th>
                   <th className="px-4 py-3 text-right">Delegated VP</th>
                   <th className="px-4 py-3 text-right">Delegators</th>
-                  <th className="px-4 py-3 text-right">Rank</th>
-                  <th className="px-4 py-3 text-right">Bonus APY</th>
+                  <th className="px-4 py-3 text-right">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {leaderboard.map((a: any, i: number) => (
+                {leaderboard.map((a: any) => (
                   <tr key={a.agent_name} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
-                    <td className="px-4 py-3 text-gray-500 font-mono">{i + 1}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center text-xs font-bold px-2 py-0.5 rounded-full ${RANK_BADGE[a.rank] ?? "bg-gray-800 text-gray-500"}`}>
+                        {a.rank_label || `#${a.rank}`}
+                      </span>
+                    </td>
                     <td className="px-4 py-3">
                       <span className="font-semibold text-white">{a.agent_name}</span>
+                      {a.is_genesis && (
+                        <span className="ml-2 text-xs text-purple-400 bg-purple-900/30 rounded-full px-1.5 py-0.5">
+                          Genesis
+                        </span>
+                      )}
                       {a.voted_this_epoch && (
-                        <span className="ml-2 text-xs text-green-400 bg-green-900/30 rounded-full px-1.5 py-0.5">
+                        <span className="ml-1 text-xs text-green-400 bg-green-900/30 rounded-full px-1.5 py-0.5">
                           voted
                         </span>
                       )}
@@ -350,12 +355,10 @@ export default function StakePage() {
                       {a.delegator_count}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${RANK_BADGE[a.tier] ?? "bg-gray-700 text-gray-300"}`}>
-                        {RANK_EMOJI[a.tier]} {a.tier}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right text-green-300 font-semibold">
-                      +{a.bonus_pct?.toFixed(1)}%
+                      {a.is_genesis
+                        ? <span className="text-xs text-gray-500">—</span>
+                        : <span className="text-xs text-green-400">3% creator reward</span>
+                      }
                     </td>
                   </tr>
                 ))}

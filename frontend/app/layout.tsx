@@ -18,7 +18,6 @@ export default function RootLayout({
         {/* Top Nav */}
         <nav className="border-b border-gray-800 px-6 py-3 flex items-center justify-between sticky top-0 z-50 bg-[#0a0a0f]/95 backdrop-blur">
           <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-            <span className="text-purple-400">🏛️</span>
             <span>X-Senate</span>
             <span className="text-xs font-normal text-gray-500 ml-1">Agentic Governance</span>
           </Link>
