@@ -106,9 +106,11 @@ export async function initSchema() {
 export async function dbListProposals(projectId?: string): Promise<ProposalRow[]> {
   const sql = getSql();
   if (projectId) {
-    return sql`SELECT * FROM proposals WHERE project_id = ${projectId} ORDER BY created_at DESC` as Promise<ProposalRow[]>;
+    const rows = await sql`SELECT * FROM proposals WHERE project_id = ${projectId} ORDER BY created_at DESC`;
+    return rows as unknown as ProposalRow[];
   }
-  return sql`SELECT * FROM proposals ORDER BY created_at DESC` as Promise<ProposalRow[]>;
+  const rows = await sql`SELECT * FROM proposals ORDER BY created_at DESC`;
+  return rows as unknown as ProposalRow[];
 }
 
 export async function dbGetProposal(id: string): Promise<ProposalRow | null> {
@@ -181,7 +183,8 @@ export async function dbSaveVote(data: Omit<AgentVoteRow, "id">): Promise<AgentV
 
 export async function dbGetVotes(proposalId: string): Promise<AgentVoteRow[]> {
   const sql = getSql();
-  return sql`SELECT * FROM agent_votes WHERE proposal_id = ${proposalId}` as Promise<AgentVoteRow[]>;
+  const rows = await sql`SELECT * FROM agent_votes WHERE proposal_id = ${proposalId}`;
+  return rows as unknown as AgentVoteRow[];
 }
 
 export async function dbUpdateVoteReflection(proposalId: string, agentName: string, reflection: string): Promise<void> {
@@ -206,5 +209,6 @@ export async function dbSaveDebateTurn(data: Omit<DebateTurnRow, "id">): Promise
 
 export async function dbGetDebateTurns(proposalId: string): Promise<DebateTurnRow[]> {
   const sql = getSql();
-  return sql`SELECT * FROM debate_turns WHERE proposal_id = ${proposalId} ORDER BY turn_order` as Promise<DebateTurnRow[]>;
+  const rows = await sql`SELECT * FROM debate_turns WHERE proposal_id = ${proposalId} ORDER BY turn_order`;
+  return rows as unknown as DebateTurnRow[];
 }
