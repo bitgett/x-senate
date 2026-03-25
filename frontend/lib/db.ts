@@ -42,7 +42,7 @@ export interface AgentVoteRow {
   chain_of_thought: string;
   confidence: number;
   reflection_notes: string | null;
-  voted_at: string | null;
+  voted_at?: string | null;
 }
 
 export interface DebateTurnRow {
