@@ -17,6 +17,11 @@ node_modules/
 .next/
 out/
 
+# Deploy — exclude build artifacts and secrets, keep scripts
+deploy/.env
+deploy/artifacts/
+deploy/cache/
+
 # IDE
 .vscode/
 .idea/
