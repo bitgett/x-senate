@@ -2,80 +2,12 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { useWallet } from "@/contexts/WalletContext";
 
-/**
- * X Layer logo — grid X pattern with two vertical bars on the right.
- * Based on the OKX / X Layer brand mark.
- *
- *  ■■ ·· ■■  | ‖
- *  ■■ ·· ■■  | ‖
- *  ·· ■■ ··  | ‖
- *  ·· ■■ ··
- *  ■■ ·· ■■  | ‖
- *  ■■ ·· ■■  | ‖
- */
-function XLayerLogo({
-  height = 24,
-  color = "#ffffff",
-  gradStart,
-  gradEnd,
-  gradId,
-}: {
-  height?: number;
-  color?: string;
-  gradStart?: string;
-  gradEnd?: string;
-  gradId?: string;
-}) {
-  const unit  = height / 6;        // 6 rows
-  const gap   = unit * 0.16;
-  const sq    = unit - gap;
-  const r     = sq * 0.14;         // corner radius
-
-  // cells for the X pattern [col, row]
-  const xCells: [number, number][] = [
-    [0,0],[1,0],[3,0],[4,0],
-    [0,1],[1,1],[3,1],[4,1],
-    [1,2],[2,2],[3,2],
-    [1,3],[2,3],[3,3],
-    [0,4],[1,4],[3,4],[4,4],
-    [0,5],[1,5],[3,5],[4,5],
-  ];
-
-  const fill = gradId ? `url(#${gradId})` : color;
-  const barX1 = 5.8 * unit;
-  const barX2 = 7.0 * unit;
-  const barW1 = sq;
-  const barW2 = sq * 0.65;
-  const totalW = barX2 + barW2 + gap;
-
-  return (
-    <svg width={totalW} height={height} viewBox={`0 0 ${totalW} ${height}`} fill="none">
-      {gradId && gradStart && gradEnd && (
-        <defs>
-          <linearGradient id={gradId} x1="0" y1="0" x2={totalW} y2={height} gradientUnits="userSpaceOnUse">
-            <stop stopColor={gradStart} />
-            <stop offset="1" stopColor={gradEnd} />
-          </linearGradient>
-        </defs>
-      )}
-
-      {/* X pattern */}
-      {xCells.map(([col, row]) => (
-        <rect
-          key={`${col}-${row}`}
-          x={col * unit + gap / 2}
-          y={row * unit + gap / 2}
-          width={sq} height={sq} rx={r}
-          fill={fill}
-        />
-      ))}
-
-      {/* Right vertical bars */}
-      <rect x={barX1} y={gap / 2} width={barW1} height={height - gap} rx={r} fill={fill} />
-      <rect x={barX2} y={gap / 2} width={barW2} height={height - gap} rx={r * 0.8} fill={fill} />
-    </svg>
-  );
+function fmt(val: number): string {
+  if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(1)}M`;
+  if (val >= 1_000)     return `${(val / 1_000).toFixed(1)}K`;
+  return val.toFixed(0);
 }
 
 const NAV_ITEMS = [
@@ -90,6 +22,7 @@ const NAV_ITEMS = [
 
 export default function NavBar() {
   const pathname = usePathname();
+  const { wallet, effectiveVP, connecting, openModal, disconnect } = useWallet();
 
   return (
     <nav className="sticky top-0 z-50 border-b border-gray-800/60 bg-[#0a0a0f]/90 backdrop-blur-md">
@@ -152,6 +85,44 @@ export default function NavBar() {
 
           <div className="w-px h-5 bg-gray-800 mx-2" />
 
+          {/* ── Wallet Connect ── */}
+          {wallet ? (
+            <div className="relative group">
+              <div className="flex items-center gap-2 bg-gray-900/80 border border-gray-700/60 rounded-full px-3 py-1.5 cursor-pointer hover:border-gray-600 transition-colors">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                <span className="text-xs font-mono text-gray-300">{wallet.slice(0, 6)}...{wallet.slice(-4)}</span>
+                {effectiveVP > 0 && (
+                  <span className="text-[11px] text-purple-300 font-semibold">{fmt(effectiveVP)} VP</span>
+                )}
+              </div>
+              {/* Hover dropdown */}
+              <div className="absolute right-0 top-full mt-1.5 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all duration-150 z-50">
+                <div className="bg-gray-900 border border-gray-700/60 rounded-xl p-1.5 shadow-xl min-w-[140px]">
+                  <div className="px-3 py-1.5 text-[11px] text-gray-500 font-mono truncate max-w-[160px]">
+                    {wallet.slice(0, 10)}...{wallet.slice(-6)}
+                  </div>
+                  <div className="h-px bg-gray-800 my-1" />
+                  <button
+                    onClick={disconnect}
+                    className="w-full text-xs text-red-400 hover:text-red-300 hover:bg-red-900/10 px-3 py-1.5 text-left rounded-lg transition-colors"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={openModal}
+              disabled={connecting}
+              className="text-xs font-semibold bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white px-3 py-1.5 rounded-full transition-colors"
+            >
+              {connecting ? "..." : "Connect"}
+            </button>
+          )}
+
+          <div className="w-px h-5 bg-gray-800 mx-2" />
+
           <div className="flex items-center gap-2 bg-gray-900/80 border border-gray-800/60 rounded-full px-3 py-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
             <span className="text-xs text-gray-300 font-medium">Genesis 5</span>
@@ -162,6 +133,3 @@ export default function NavBar() {
     </nav>
   );
 }
-
-// Export for reuse in Footer etc.
-export { XLayerLogo };
