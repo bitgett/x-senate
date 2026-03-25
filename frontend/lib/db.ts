@@ -28,7 +28,7 @@ export interface ProposalRow {
   snapshot_url: string | null;
   tx_hash: string | null;
   one_liner_opinions: string | null;
-  proposer_address: string | null;
+  proposer_address?: string | null;
   created_at: string;
   updated_at: string;
 }
