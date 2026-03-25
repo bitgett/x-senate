@@ -172,16 +172,32 @@ export default function StakePage() {
                 <div className="text-3xl font-bold text-white">{t.apy_pct}%</div>
                 <div className="text-xs text-gray-400">Base APY</div>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <div className="text-gray-500">VP Multiplier</div>
-                  <div className="font-semibold text-purple-300">{t.vp_mult}x</div>
+              {/* VP Multiplier bar */}
+              <div>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="text-gray-500">VP Multiplier</span>
+                  <span className="font-bold text-purple-300">{t.vp_mult}x</span>
                 </div>
+                <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-purple-600 to-blue-400"
+                    style={{ width: `${((t.vp_mult - 1) / 0.5) * 100}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-[10px] text-gray-700 mt-0.5">
+                  <span>1.0x</span><span>1.5x</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
                   <div className="text-gray-500">Lock Period</div>
                   <div className="font-semibold text-white">
                     {t.lock_days === 0 ? "None" : `${t.lock_days}d`}
                   </div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Early Exit</div>
+                  <div className="font-semibold text-white">{t.lock_days === 0 ? "—" : "Forfeit"}</div>
                 </div>
               </div>
               <div className="text-xs text-gray-500 border-t border-gray-700/50 pt-2">
