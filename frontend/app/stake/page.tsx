@@ -157,241 +157,261 @@ export default function StakePage() {
   }
 
   const currentDelegate = positions.find(p => p.active && p.delegatedAgent)?.delegatedAgent;
+  const totalStaked = totals?.total_staked_xsen ?? 0;
+  const totalVP = totals?.total_effective_vp_xsen ?? 0;
+  const myVPPct = totalVP > 0 && effectiveVP > 0 ? ((effectiveVP / totalVP) * 100).toFixed(2) : "0.00";
+  const totalAccReward = positions.reduce((s, p) => s + p.accReward, 0);
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8">
+    <div className="-mx-6 -mt-6">
 
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Staking</h1>
-          <p className="text-gray-500 mt-1 text-sm">Stake XSEN · Earn rewards · Delegate VP to AI agents</p>
+      {/* ── Hero Dashboard ─────────────────────────────────────────── */}
+      <div className="relative overflow-hidden px-6 pt-16 pb-10 text-center border-b border-gray-800/40"
+        style={{ background: "radial-gradient(ellipse 80% 60% at 50% -10%, rgba(139,92,246,0.12) 0%, transparent 70%)" }}
+      >
+        <h1 className="text-5xl font-black text-white mb-3 tracking-tight">
+          X-Senate <span className="text-purple-400">Stake</span>
+        </h1>
+        <p className="text-gray-500 max-w-lg mx-auto mb-8">
+          Stake and lock XSEN to receive Voting Power. Delegate to AI agents and participate in X-Senate governance.
+        </p>
+
+        {/* Action bar */}
+        <div className="flex items-center justify-center gap-3">
+          {wallet ? (
+            <>
+              <button
+                onClick={async () => {
+                  if (!wallet) return;
+                  try {
+                    const provider = new ethers.BrowserProvider(getProvider());
+                    const signer = await provider.getSigner();
+                    const staking = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
+                    const tx = await staking.claimAllRewards();
+                    setTxStatus("Claiming rewards...");
+                    await tx.wait();
+                    setTxStatus("Rewards claimed!");
+                    await loadWalletData(wallet, walletType ?? undefined);
+                  } catch (e: any) { setTxStatus(`Error: ${e.message?.slice(0,60)}`); }
+                }}
+                className="flex items-center gap-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 font-semibold px-5 py-2.5 rounded-full text-sm transition-all"
+              >
+                Claim Rewards · {fmt(totalAccReward)} XSEN
+              </button>
+              <div className="flex items-center gap-2 bg-gray-900 border border-gray-700 rounded-full px-4 py-2.5 text-sm">
+                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                <span className="font-mono text-gray-300">{shortAddr(wallet)}</span>
+                <span className="text-gray-600">·</span>
+                <span className="text-white font-semibold">{fmt(xsenBal)} XSEN</span>
+              </div>
+            </>
+          ) : (
+            <button
+              onClick={() => setShowWalletModal(true)}
+              disabled={connecting}
+              className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold px-8 py-3 rounded-full transition-all hover:scale-105 text-sm"
+              style={{ boxShadow: "0 0 30px rgba(139,92,246,0.35)" }}
+            >
+              {connecting ? "Connecting..." : "Connect Wallet"}
+            </button>
+          )}
         </div>
 
-        {/* Wallet connect */}
-        {wallet ? (
-          <div className="flex items-center gap-3 bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5">
-            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-            <div>
-              <div className="text-xs text-gray-500">Connected</div>
-              <div className="text-sm font-mono text-white">{shortAddr(wallet)}</div>
-            </div>
-            <div className="w-px h-8 bg-gray-700" />
-            <div className="text-right">
-              <div className="text-xs text-gray-500">XSEN Balance</div>
-              <div className="text-sm font-bold text-white">{fmt(xsenBal)}</div>
-            </div>
-            <div className="w-px h-8 bg-gray-700" />
-            <div className="text-right">
-              <div className="text-xs text-gray-500">Voting Power</div>
-              <div className="text-sm font-bold text-purple-300">{fmt(effectiveVP)} VP</div>
-            </div>
+        {txStatus && (
+          <div className={`mt-4 inline-block rounded-full px-4 py-1.5 text-xs border ${txStatus.startsWith("Error") ? "bg-red-900/20 border-red-700/40 text-red-300" : "bg-green-900/20 border-green-700/40 text-green-300"}`}>
+            {txStatus}
           </div>
-        ) : (
-          <button
-            onClick={() => setShowWalletModal(true)}
-            disabled={connecting}
-            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-xl transition-all hover:scale-105"
-            style={{ boxShadow: "0 0 20px rgba(139,92,246,0.3)" }}
-          >
-            {connecting ? (
-              <span className="animate-spin text-lg">◌</span>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/></svg>
-            )}
-            {connecting ? "Connecting..." : "Connect Wallet"}
-          </button>
         )}
       </div>
 
-      {/* TX status */}
-      {txStatus && (
-        <div className={`rounded-xl px-4 py-3 text-sm border ${txStatus.startsWith("Error") ? "bg-red-900/20 border-red-700/40 text-red-300" : "bg-green-900/20 border-green-700/40 text-green-300"}`}>
-          {txStatus}
-        </div>
-      )}
-
-      {/* Stats row */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl p-4">
-          <div className="text-xs text-gray-500 mb-1">Total Staked</div>
-          <div className="text-2xl font-bold text-white">{totals?.total_staked_xsen != null ? fmt(totals.total_staked_xsen) : "—"}</div>
-          <div className="text-xs text-gray-600">XSEN</div>
-        </div>
-        <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl p-4">
-          <div className="text-xs text-gray-500 mb-1">Total Effective VP</div>
-          <div className="text-2xl font-bold text-purple-300">{totals?.total_effective_vp_xsen != null ? fmt(totals.total_effective_vp_xsen) : "—"}</div>
-          <div className="text-xs text-gray-600">votes</div>
-        </div>
-        <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl p-4">
-          <div className="text-xs text-gray-500 mb-1">Your Delegation</div>
-          <div className="text-2xl font-bold text-white">{currentDelegate || (wallet ? "None" : "—")}</div>
-          <div className="text-xs text-gray-600">{wallet ? "current agent" : "connect wallet"}</div>
-        </div>
-      </div>
-
-      {/* Two-column layout */}
-      <div className="grid md:grid-cols-2 gap-6">
-
-        {/* Left: Staking Tiers */}
-        <div>
-          <h2 className="text-lg font-semibold text-white mb-4">Staking Tiers</h2>
-          <div className="space-y-3">
-            {TIER_INFO.map((t) => (
-              <div key={t.id} className={`border rounded-xl p-4 ${t.color}`}>
-                <div className="flex items-center justify-between mb-3">
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${t.badge}`}>{t.name}</span>
-                  <div className="flex items-center gap-3 text-sm">
-                    <span className="text-white font-bold">{t.apy}% APY</span>
-                    {t.days > 0 && <span className="text-gray-500 text-xs">{t.days}d lock</span>}
-                  </div>
-                </div>
-                <div className="mb-1 flex items-center justify-between text-xs">
-                  <span className="text-gray-500">VP Multiplier</span>
-                  <span className="font-bold text-purple-300">{t.mult}x</span>
-                </div>
-                <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-purple-600 to-blue-400"
-                    style={{ width: `${((t.mult - 1) / 0.5) * 100}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-[10px] text-gray-700 mt-0.5">
-                  <span>1.0x base</span><span>1.5x max</span>
-                </div>
-              </div>
-            ))}
+      {/* ── Big Stats ──────────────────────────────────────────────── */}
+      <div className="grid md:grid-cols-2 gap-px bg-gray-800/40">
+        {/* Global */}
+        <div className="bg-[#0a0a0f] px-8 py-8">
+          <div className="text-xs font-mono text-gray-600 tracking-widest uppercase mb-5">Protocol</div>
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <div className="text-3xl font-black text-white">{fmt(totalStaked)}</div>
+              <div className="text-sm text-gray-500 mt-1">Total XSEN Staked</div>
+            </div>
+            <div>
+              <div className="text-3xl font-black text-purple-300">{fmt(totalVP)}</div>
+              <div className="text-sm text-gray-500 mt-1">Total Voting Power</div>
+            </div>
+            <div>
+              <div className="text-3xl font-black text-blue-300">{leaderboard.length}</div>
+              <div className="text-sm text-gray-500 mt-1">Active Agents</div>
+            </div>
+            <div>
+              <div className="text-3xl font-black text-green-300">35%</div>
+              <div className="text-sm text-gray-500 mt-1">Max APY</div>
+            </div>
           </div>
         </div>
 
-        {/* Right: Delegate to Agent */}
-        <div>
-          <h2 className="text-lg font-semibold text-white mb-4">
-            Delegate Voting Power
-            {wallet && <span className="ml-2 text-sm font-normal text-purple-300">{fmt(effectiveVP)} VP available</span>}
-          </h2>
-
-          {!wallet && (
-            <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl p-6 text-center">
-              <div className="text-gray-500 text-sm mb-3">Connect your wallet to delegate VP</div>
-              <button onClick={() => setShowWalletModal(true)} className="bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
-                Connect Wallet
-              </button>
+        {/* Personal */}
+        <div className="bg-[#0a0a0f] px-8 py-8">
+          <div className="text-xs font-mono text-gray-600 tracking-widest uppercase mb-5">My Position</div>
+          {wallet ? (
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <div className="text-3xl font-black text-white">{myVPPct}%</div>
+                <div className="text-sm text-gray-500 mt-1">My Voting Power</div>
+              </div>
+              <div>
+                <div className="text-3xl font-black text-purple-300">{fmt(effectiveVP)}</div>
+                <div className="text-sm text-gray-500 mt-1">Effective VP</div>
+              </div>
+              <div>
+                <div className="text-3xl font-black text-white">{fmt(positions.filter(p=>p.active).reduce((s,p)=>s+p.amount,0))}</div>
+                <div className="text-sm text-gray-500 mt-1">XSEN Staked</div>
+              </div>
+              <div>
+                <div className="text-3xl font-black text-yellow-300">{currentDelegate || "—"}</div>
+                <div className="text-sm text-gray-500 mt-1">Delegated To</div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-32 text-gray-600 text-sm">
+              Connect wallet to view your position
             </div>
           )}
+        </div>
+      </div>
 
-          {wallet && (
-            <div className="space-y-3">
-              {GENESIS_AGENTS.map((agent) => {
-                const lb = leaderboard.find(l => l.agent_name === agent.name);
-                const isCurrentDelegate = currentDelegate === agent.name;
-                return (
-                  <div
-                    key={agent.name}
-                    className={`border rounded-xl p-4 transition-all ${
-                      isCurrentDelegate
-                        ? "border-purple-500/50 bg-purple-950/20"
-                        : "border-gray-800/60 bg-gray-900/30 hover:border-gray-700"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
+      {/* ── Content ────────────────────────────────────────────────── */}
+      <div className="max-w-5xl mx-auto px-6 py-10 space-y-10">
+
+        {/* Tiers + Delegate */}
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Staking Tiers */}
+          <div>
+            <h2 className="text-base font-semibold text-white mb-4 tracking-tight">Staking Tiers</h2>
+            <div className="space-y-2">
+              {TIER_INFO.map((t) => (
+                <div key={t.id} className={`border rounded-xl p-4 ${t.color}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${t.badge}`}>{t.name}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-white font-bold text-sm">{t.apy}% APY</span>
+                      {t.days > 0 && <span className="text-gray-500 text-xs">{t.days}d lock</span>}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="text-gray-500">VP Multiplier</span>
+                    <span className="font-bold text-purple-300">{t.mult}x</span>
+                  </div>
+                  <div className="h-1 bg-gray-800 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full bg-gradient-to-r from-purple-600 to-blue-400" style={{ width: `${((t.mult - 1) / 0.5) * 100}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Delegate */}
+          <div>
+            <h2 className="text-base font-semibold text-white mb-4 tracking-tight">
+              Delegate Voting Power
+              {wallet && <span className="ml-2 text-sm font-normal text-purple-400">{fmt(effectiveVP)} VP</span>}
+            </h2>
+            {!wallet ? (
+              <div className="border border-gray-800/60 rounded-xl p-8 text-center">
+                <div className="text-gray-600 text-sm mb-3">Connect wallet to delegate</div>
+                <button onClick={() => setShowWalletModal(true)} className="bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+                  Connect Wallet
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {GENESIS_AGENTS.map((agent) => {
+                  const lb = leaderboard.find(l => l.agent_name === agent.name);
+                  const isActive = currentDelegate === agent.name;
+                  return (
+                    <div key={agent.name} className={`border rounded-xl p-3.5 flex items-center justify-between transition-all ${isActive ? "border-purple-500/50 bg-purple-950/20" : "border-gray-800/60 bg-gray-900/20 hover:border-gray-700"}`}>
                       <div className="flex items-center gap-3">
-                        {/* Color dot */}
-                        <div className="w-2 h-8 rounded-full" style={{ backgroundColor: agent.accent }} />
+                        <div className="w-1 h-8 rounded-full" style={{ backgroundColor: agent.accent }} />
                         <div>
                           <div className="font-semibold text-white text-sm">{agent.name}</div>
-                          <div className="text-xs text-gray-500">{agent.role}</div>
+                          <div className="text-xs text-gray-600">{agent.role}</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        {lb && (
-                          <div className="text-right text-xs">
-                            <div className="text-gray-500">{fmt(lb.total_delegated_vp_xsen)} VP</div>
-                            <div className="text-gray-600">{lb.delegator_count} delegators</div>
-                          </div>
-                        )}
-                        {isCurrentDelegate ? (
-                          <span className="text-xs bg-purple-600/30 border border-purple-500/40 text-purple-300 px-3 py-1.5 rounded-lg font-medium">
-                            Delegated
-                          </span>
+                        {lb && <div className="text-right text-xs text-gray-600">{fmt(lb.total_delegated_vp_xsen)} VP</div>}
+                        {isActive ? (
+                          <span className="text-xs bg-purple-600/20 border border-purple-500/30 text-purple-300 px-3 py-1.5 rounded-lg">Delegated</span>
                         ) : (
-                          <button
-                            onClick={() => delegateTo(agent.name)}
-                            disabled={!!delegating || positions.filter(p => p.active).length === 0}
-                            className="text-xs bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg transition-colors font-medium"
-                          >
+                          <button onClick={() => delegateTo(agent.name)} disabled={!!delegating || positions.filter(p=>p.active).length===0} className="text-xs bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg transition-colors">
                             {delegating === agent.name ? "..." : "Delegate"}
                           </button>
                         )}
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-
-              {positions.filter(p => p.active).length === 0 && (
-                <p className="text-xs text-gray-600 mt-2">Stake XSEN first to delegate voting power.</p>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* My Positions */}
-      {wallet && positions.length > 0 && (
-        <div>
-          <h2 className="text-lg font-semibold text-white mb-4">My Positions</h2>
-          <div className="grid sm:grid-cols-2 gap-4">
-            {positions.map(p => (
-              <div key={p.id} className={`border rounded-xl p-4 ${p.active ? "border-gray-700 bg-gray-900/50" : "border-gray-800 opacity-50"}`}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-gray-500">Position #{p.id}</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${TIER_INFO[p.tierId]?.badge ?? "bg-gray-700 text-gray-300"}`}>{p.tier}</span>
-                </div>
-                <div className="text-xl font-bold text-white">{fmt(p.amount)} XSEN</div>
-                <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-gray-500">
-                  <div>Reward: <span className="text-green-300">+{fmt(p.accReward)}</span></div>
-                  <div>Delegate: <span className="text-purple-300">{p.delegatedAgent || "—"}</span></div>
-                </div>
+                  );
+                })}
+                {positions.filter(p=>p.active).length===0 && <p className="text-xs text-gray-700 mt-2">Stake XSEN first to enable delegation.</p>}
               </div>
-            ))}
+            )}
           </div>
         </div>
-      )}
 
-      {/* Agent Leaderboard */}
-      <div>
-        <h2 className="text-lg font-semibold text-white mb-4">Agent Leaderboard</h2>
-        <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-800 text-xs text-gray-500 text-left">
-                <th className="px-4 py-3 w-16">Rank</th>
-                <th className="px-4 py-3">Agent</th>
-                <th className="px-4 py-3 text-right">Delegated VP</th>
-                <th className="px-4 py-3 text-right">Delegators</th>
-              </tr>
-            </thead>
-            <tbody>
-              {leaderboard.map((a: any) => (
-                <tr key={a.agent_name} className="border-b border-gray-800/40 hover:bg-gray-800/20 transition-colors">
-                  <td className="px-4 py-3">
-                    <span className="text-xs font-bold text-gray-400">{a.rank_label}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="font-semibold text-white">{a.agent_name}</span>
-                    {a.is_genesis && <span className="ml-2 text-xs text-purple-400 bg-purple-900/30 rounded-full px-1.5 py-0.5">Genesis</span>}
-                    {a.voted_this_epoch && <span className="ml-1 text-xs text-green-400 bg-green-900/30 rounded-full px-1.5 py-0.5">Active</span>}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-purple-300">{fmt(a.total_delegated_vp_xsen)}</td>
-                  <td className="px-4 py-3 text-right text-gray-400">{a.delegator_count}</td>
-                </tr>
+        {/* My Positions */}
+        {wallet && positions.length > 0 && (
+          <div>
+            <h2 className="text-base font-semibold text-white mb-4">My Positions</h2>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {positions.map(p => (
+                <div key={p.id} className={`border rounded-xl p-4 ${p.active ? "border-gray-700 bg-gray-900/40" : "border-gray-800 opacity-50"}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-gray-600">Position #{p.id}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${TIER_INFO[p.tierId]?.badge ?? "bg-gray-700 text-gray-300"}`}>{p.tier}</span>
+                  </div>
+                  <div className="text-2xl font-black text-white">{fmt(p.amount)} <span className="text-sm font-normal text-gray-500">XSEN</span></div>
+                  <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+                    <span>Reward: <span className="text-green-400">+{fmt(p.accReward)}</span></span>
+                    <span className="text-purple-400">{p.delegatedAgent || "—"}</span>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </div>
+          </div>
+        )}
 
+        {/* Leaderboard */}
+        <div>
+          <h2 className="text-base font-semibold text-white mb-4">Agent Leaderboard</h2>
+          <div className="border border-gray-800/60 rounded-xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-800 text-xs text-gray-600 text-left bg-gray-900/30">
+                  <th className="px-4 py-3 w-16">Rank</th>
+                  <th className="px-4 py-3">Agent</th>
+                  <th className="px-4 py-3 text-right">Delegated VP</th>
+                  <th className="px-4 py-3 text-right">Delegators</th>
+                  <th className="px-4 py-3 text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leaderboard.map((a: any) => (
+                  <tr key={a.agent_name} className="border-b border-gray-800/30 hover:bg-gray-800/20 transition-colors">
+                    <td className="px-4 py-3 text-xs font-bold text-gray-500">{a.rank_label}</td>
+                    <td className="px-4 py-3">
+                      <span className="font-semibold text-white">{a.agent_name}</span>
+                      {a.is_genesis && <span className="ml-2 text-xs text-purple-400 bg-purple-900/20 rounded-full px-1.5 py-0.5">Genesis</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono text-purple-300">{fmt(a.total_delegated_vp_xsen)}</td>
+                    <td className="px-4 py-3 text-right text-gray-400">{a.delegator_count}</td>
+                    <td className="px-4 py-3 text-right">
+                      {a.voted_this_epoch ? <span className="text-xs text-green-400 bg-green-900/20 rounded-full px-2 py-0.5">Active</span> : <span className="text-xs text-gray-700">—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
     </div>
 
       {/* Wallet selection modal */}
