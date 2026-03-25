@@ -32,7 +32,7 @@ async function tryOkxMarketV6(): Promise<number | null> {
   }
 }
 
-// ── On-chain pool price via X Layer RPC ────────────────────────────────────
+// ── On-chain pool price via X Layer RPC (Uniswap V3 / Algebra) ─────────────
 async function ethCall(to: string, data: string): Promise<string> {
   const res = await fetch(XLAYER_RPC, {
     method: "POST",
@@ -49,49 +49,56 @@ async function ethCall(to: string, data: string): Promise<string> {
 
 async function tryPoolPrice(): Promise<number | null> {
   try {
-    // Read token0, token1, and reserves in parallel
-    const [t0raw, t1raw, reservesRaw] = await Promise.all([
+    // Read token0, token1, and slot0 in parallel (Uniswap V3 / Algebra pool)
+    const [t0raw, t1raw, slot0raw] = await Promise.all([
       ethCall(XSEN_POOL, "0x0dfe1681"), // token0()
       ethCall(XSEN_POOL, "0xd21220a7"), // token1()
-      ethCall(XSEN_POOL, "0x0902f1ac"), // getReserves()
+      ethCall(XSEN_POOL, "0x3850c7bd"), // slot0() — V3/Algebra
     ]);
 
-    if (!reservesRaw || reservesRaw === "0x" || reservesRaw.length < 130) return null;
+    if (!slot0raw || slot0raw === "0x" || slot0raw.length < 66) return null;
 
-    const token0 = ("0x" + t0raw.slice(-40)).toLowerCase();
-    const token1 = ("0x" + t1raw.slice(-40)).toLowerCase();
+    // sqrtPriceX96 is first 32 bytes of slot0 return (uint160, padded)
+    const sqrtPriceX96 = BigInt("0x" + slot0raw.slice(2, 66));
+    if (sqrtPriceX96 === 0n) return null;
+
+    const token0      = ("0x" + t0raw.slice(-40)).toLowerCase();
+    const token1      = ("0x" + t1raw.slice(-40)).toLowerCase();
     const xsenIsToken0 = token0 === XSEN_ADDRESS.toLowerCase();
+    const pairedToken  = xsenIsToken0 ? token1 : token0;
 
-    // Uniswap V2 reserves: [uint112 reserve0][uint112 reserve1][uint32 ts]
-    const r0 = BigInt("0x" + reservesRaw.slice(2, 66));
-    const r1 = BigInt("0x" + reservesRaw.slice(66, 130));
+    const decRaw  = await ethCall(pairedToken, "0x313ce567"); // decimals()
+    const pairedDec = decRaw && decRaw !== "0x" ? (parseInt(decRaw.slice(-2), 16) || 18) : 18;
 
-    const xsenReserve  = xsenIsToken0 ? r0 : r1;
-    const otherReserve = xsenIsToken0 ? r1 : r0;
-    const otherToken   = xsenIsToken0 ? token1 : token0;
+    // V3 price: sqrtPriceX96 = sqrt(token1/token0 in raw units) * 2^96
+    // price of 1 XSEN in paired token (human units):
+    //   priceUsd = (sqrtPriceX96^2 / 2^192) * 10^decXSEN / 10^decPaired
+    const Q96 = 2n ** 96n;
 
-    if (xsenReserve === 0n) return null;
+    let priceUsd: number;
+    if (xsenIsToken0) {
+      // price = sqrtPriceX96^2 / 2^192 * 10^(18 - pairedDec)
+      const scaledNum = sqrtPriceX96 * sqrtPriceX96 * (10n ** BigInt(18 - pairedDec)) * (10n ** 18n);
+      priceUsd = Number(scaledNum / (Q96 * Q96)) / 1e18;
+    } else {
+      // XSEN is token1: price = 2^192 / sqrtPriceX96^2 * 10^(18 - pairedDec)
+      const scaledNum = (Q96 * Q96) * (10n ** BigInt(18 - pairedDec)) * (10n ** 18n);
+      priceUsd = Number(scaledNum / (sqrtPriceX96 * sqrtPriceX96)) / 1e18;
+    }
 
-    // Get decimals of the paired token
-    const decRaw       = await ethCall(otherToken, "0x313ce567"); // decimals()
-    const otherDec     = decRaw && decRaw !== "0x" ? (parseInt(decRaw, 16) || 18) : 18;
-
-    // Price of 1 XSEN in terms of the other token
-    const rawPrice = (Number(otherReserve) / 10 ** otherDec) /
-                     (Number(xsenReserve)  / 1e18);
-
-    // If paired with a stablecoin (6 decimals: USDC/USDT) → direct USD price
-    if (otherDec === 6) return rawPrice > 0 ? rawPrice : null;
-
-    // If paired with OKB or wETH (18 decimals) → convert via CoinGecko OKB price
-    if (otherDec === 18) {
-      const cgRes  = await fetch(
-        "https://api.coingecko.com/api/v3/simple/price?ids=okb&vs_currencies=usd",
-        { signal: AbortSignal.timeout(4000) }
-      );
-      const cgData = await cgRes.json().catch(() => null);
-      const okbUsd = cgData?.okb?.usd;
-      if (okbUsd && okbUsd > 0) return rawPrice * okbUsd;
+    if (pairedDec === 6 || pairedDec === 18) {
+      // For 18-dec paired tokens (OKB/wETH), get OKB price from CoinGecko
+      if (pairedDec === 18) {
+        const cgRes  = await fetch(
+          "https://api.coingecko.com/api/v3/simple/price?ids=okb&vs_currencies=usd",
+          { signal: AbortSignal.timeout(4000) }
+        );
+        const cgData = await cgRes.json().catch(() => null);
+        const okbUsd = cgData?.okb?.usd;
+        if (okbUsd && okbUsd > 0) priceUsd = priceUsd * okbUsd;
+        else return null;
+      }
+      return priceUsd > 0 ? priceUsd : null;
     }
 
     return null;
