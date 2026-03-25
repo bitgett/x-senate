@@ -15,16 +15,20 @@ export async function GET(req: NextRequest) {
   const onchain = await getLeaderboard(limit);
   if (onchain.length > 0) return NextResponse.json(onchain);
 
+  const RANK_LABEL: Record<number, string> = { 1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 5: "5th" };
   // Return Genesis 5 with mock VP data when contract not deployed
   return NextResponse.json(
     GENESIS_5_META.map((a, i) => ({
       rank: i + 1,
+      rank_label: RANK_LABEL[i + 1] ?? "",
       agent_name: a.agentName,
       emoji: a.emoji,
       color: a.color,
-      total_delegated_vp: Math.floor(4_200_000 / (i + 1)),
-      uga_rank: i < 2 ? "Gold" : i < 4 ? "Silver" : "Bronze",
-      bonus_apy_bps: i < 2 ? 200 : i < 4 ? 150 : 100,
+      total_delegated_vp_xsen: Math.floor(4_200_000 / (i + 1)),
+      delegator_count: Math.floor(120 / (i + 1)),
+      is_genesis: true,
+      creator: null,
+      voted_this_epoch: i < 3,
     }))
   );
 }
