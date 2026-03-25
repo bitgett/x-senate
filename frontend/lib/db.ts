@@ -105,6 +105,70 @@ export async function initSchema() {
       one_liner        TEXT
     )
   `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS user_agents (
+      id               SERIAL PRIMARY KEY,
+      wallet_address   TEXT NOT NULL,
+      agent_name       TEXT NOT NULL UNIQUE,
+      system_prompt    TEXT,
+      focus_area       TEXT,
+      avatar_base64    TEXT,
+      rank             TEXT DEFAULT 'Bronze',
+      delegated_vp     NUMERIC DEFAULT 0,
+      score            NUMERIC DEFAULT 0,
+      created_at       TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
+  await sql`ALTER TABLE user_agents ADD COLUMN IF NOT EXISTS avatar_base64 TEXT`;
+}
+
+// ─── User Agents (UGA) ────────────────────────────────────────────────────────
+
+export interface UGARow {
+  id: number;
+  wallet_address: string;
+  agent_name: string;
+  system_prompt: string | null;
+  focus_area: string | null;
+  avatar_base64: string | null;
+  rank: string;
+  delegated_vp: number;
+  score: number;
+  created_at: string;
+}
+
+export async function dbListUGAs(): Promise<UGARow[]> {
+  const sql = getSql();
+  const rows = await sql`SELECT * FROM user_agents ORDER BY score DESC, created_at DESC`;
+  return rows as unknown as UGARow[];
+}
+
+export async function dbCreateUGA(data: {
+  wallet_address: string;
+  agent_name: string;
+  system_prompt?: string;
+  focus_area?: string;
+  avatar_base64?: string;
+}): Promise<UGARow> {
+  const sql = getSql();
+  const rows = await sql`
+    INSERT INTO user_agents (wallet_address, agent_name, system_prompt, focus_area, avatar_base64)
+    VALUES (
+      ${data.wallet_address}, ${data.agent_name},
+      ${data.system_prompt ?? null}, ${data.focus_area ?? null},
+      ${data.avatar_base64 ?? null}
+    )
+    ON CONFLICT (agent_name) DO NOTHING
+    RETURNING *
+  ` as UGARow[];
+  if (!rows[0]) throw new Error(`Agent name "${data.agent_name}" is already taken`);
+  return rows[0];
+}
+
+export async function dbGetUGAByWallet(walletAddress: string): Promise<UGARow | null> {
+  const sql = getSql();
+  const rows = await sql`SELECT * FROM user_agents WHERE LOWER(wallet_address) = LOWER(${walletAddress}) LIMIT 1` as UGARow[];
+  return rows[0] ?? null;
 }
 
 // ─── Proposals ────────────────────────────────────────────────────────────────

@@ -185,8 +185,33 @@ export default function AgentsPage() {
   const [showPrompt, setShowPrompt]   = useState(false);
   const [customMode, setCustomMode]   = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");
+  const [avatarBase64, setAvatarBase64] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
   const [registerResult, setRegResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 500_000) { setRegResult({ ok: false, msg: "Image too large. Max 500KB." }); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Resize to 200x200 via canvas
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 200; canvas.height = 200;
+        const ctx = canvas.getContext("2d")!;
+        // Cover crop: center
+        const scale = Math.max(200 / img.width, 200 / img.height);
+        const w = img.width * scale, h = img.height * scale;
+        ctx.drawImage(img, (200 - w) / 2, (200 - h) / 2, w, h);
+        setAvatarBase64(canvas.toDataURL("image/jpeg", 0.85));
+      };
+      img.src = result;
+    };
+    reader.readAsDataURL(file);
+  }
 
   useEffect(() => {
     Promise.all([
@@ -255,9 +280,10 @@ export default function AgentsPage() {
       await registerUGA({
         wallet_address: wallet,
         agent_name: agentName.trim(),
-        system_prompt: buildSystemPrompt({ name: agentName.trim(), focus: focusArea, style, ...weights, mandate }),
+        system_prompt: customMode ? customPrompt : buildSystemPrompt({ name: agentName.trim(), focus: focusArea, style, ...weights, mandate }),
         focus_area: focusArea,
-      });
+        avatar_base64: avatarBase64 ?? undefined,
+      } as any);
       setRegResult({ ok: true, msg: `Agent "${agentName.trim()}" registered successfully!` });
       await loadUgas();
       setTimeout(() => setTab("mine"), 1200);
@@ -438,8 +464,12 @@ export default function AgentsPage() {
                     <div key={u.id} className="border border-gray-800/60 rounded-xl p-4 hover:border-gray-700 transition-colors bg-gray-900/30">
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-9 h-9 rounded-xl bg-gray-800 border border-gray-700 flex items-center justify-center text-sm font-black text-white">
-                            {u.agent_name[0].toUpperCase()}
+                          <div className="w-10 h-10 rounded-xl bg-gray-800 border border-gray-700 overflow-hidden flex items-center justify-center text-sm font-black text-white shrink-0">
+                            {(u as any).avatar_base64
+                              // eslint-disable-next-line @next/next/no-img-element
+                              ? <img src={(u as any).avatar_base64} alt={u.agent_name} className="w-full h-full object-cover" />
+                              : u.agent_name[0].toUpperCase()
+                            }
                           </div>
                           <div>
                             <div className="font-semibold text-white text-sm">{u.agent_name}</div>
@@ -505,6 +535,44 @@ export default function AgentsPage() {
                 {/* Step 1: Basic Info */}
                 <div className="space-y-4">
                   <div className="text-xs text-gray-600 uppercase tracking-widest">Step 1 — Identity</div>
+
+                  {/* Avatar upload */}
+                  <div className="flex items-center gap-5">
+                    <div className="relative shrink-0">
+                      <div className="w-[80px] h-[80px] rounded-2xl overflow-hidden border-2 border-gray-700 bg-gray-800 flex items-center justify-center">
+                        {avatarBase64 ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={avatarBase64} alt="avatar" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="flex flex-col items-center gap-1">
+                            <span className="text-2xl text-gray-600">{agentName ? agentName[0].toUpperCase() : "?"}</span>
+                          </div>
+                        )}
+                      </div>
+                      {avatarBase64 && (
+                        <button
+                          onClick={() => setAvatarBase64(null)}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 rounded-full text-white text-[10px] flex items-center justify-center hover:bg-red-500"
+                        >×</button>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-xs text-gray-400 mb-1.5 block">Profile Image <span className="text-gray-700">(200×200px · JPEG/PNG)</span></label>
+                      <label className="flex items-center gap-2 cursor-pointer w-fit">
+                        <div className="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-xs px-4 py-2 rounded-lg transition-colors">
+                          {avatarBase64 ? "Change Image" : "Upload Image"}
+                        </div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleAvatarUpload}
+                          className="hidden"
+                        />
+                      </label>
+                      <p className="text-[10px] text-gray-700 mt-1.5">Auto-cropped to 200×200. Max 500KB.</p>
+                    </div>
+                  </div>
+
                   <div>
                     <label className="text-xs text-gray-400 mb-1.5 block">Agent Name <span className="text-gray-700">(unique, public)</span></label>
                     <input
@@ -757,8 +825,12 @@ export default function AgentsPage() {
               {/* Agent Profile */}
               <div className="border border-purple-500/30 bg-purple-950/10 rounded-2xl p-6">
                 <div className="flex items-center gap-4 mb-5">
-                  <div className="w-16 h-16 rounded-2xl bg-purple-900/30 border border-purple-600/40 flex items-center justify-center text-2xl font-black text-purple-300">
-                    {myAgent.agent_name[0].toUpperCase()}
+                  <div className="w-16 h-16 rounded-2xl bg-purple-900/30 border border-purple-600/40 overflow-hidden flex items-center justify-center text-2xl font-black text-purple-300">
+                    {(myAgent as any).avatar_base64
+                      // eslint-disable-next-line @next/next/no-img-element
+                      ? <img src={(myAgent as any).avatar_base64} alt={myAgent.agent_name} className="w-full h-full object-cover" />
+                      : myAgent.agent_name[0].toUpperCase()
+                    }
                   </div>
                   <div>
                     <div className="text-xl font-black text-white">{myAgent.agent_name}</div>
