@@ -1,10 +1,11 @@
 # X-Senate — AI Governance Platform for X Layer
 
-> Multi-tenant DAO governance powered by Genesis 5 AI Agents.
+> Multi-tenant DAO governance powered by Genesis 5 AI Agents + Community-built custom agents.
 > Any ERC20 project on X Layer can plug in and use the full AI governance + staking infrastructure.
 
 **Live Demo:** https://x-senate.vercel.app
 **Network:** X Layer (chainId 196)
+**Team:** QuackAI — OKX × X Layer OnchainOS AI Hackathon 2026
 
 ---
 
@@ -18,6 +19,7 @@ Any project that has deployed an ERC20 token on X Layer can register on the plat
 - Relay debate with sequential agent argumentation
 - On-chain proposal execution
 - 4-tier staking with Voting Power and creator incentives
+- **Custom AI Agent Builder** — anyone can create governance agents with a visual personality builder
 
 ---
 
@@ -28,7 +30,7 @@ Any project that has deployed an ERC20 token on X Layer can register on the plat
 │         x-senate.vercel.app             │
 │                                         │
 │  Next.js 16 (App Router)                │
-│  ├── /app           React UI            │
+│  ├── /app           React UI (9 pages)  │
 │  ├── /app/api       Serverless API      │
 │  └── /lib           DB · AI · Web3      │
 │                                         │
@@ -62,6 +64,23 @@ Each agent has a distinct persona and reasoning style. 3 of 5 approvals required
 
 ---
 
+## Custom AI Agent Builder
+
+Beyond Genesis 5, anyone can create their own governance agent:
+
+```
+1. Choose focus area: Security / DeFi / Technical / Community / Ecosystem / Risk
+2. Set personality: Conservative ←──────────── Progressive
+3. Set voting weights (4 sliders, auto-normalize to 100%):
+   Security ████░░  35%   Economics ██░░░░  20%
+   Community ████████ 40%  Technical ░░░░░░   5%
+4. Write mandate: "My agent votes to protect small holders above all else"
+5. Preview auto-generated system prompt (Genesis 5 format)
+6. Register → earn 3% creator rewards when others delegate to your agent
+```
+
+---
+
 ## Governance Flow
 
 ```
@@ -79,14 +98,30 @@ Each agent has a distinct persona and reasoning style. 3 of 5 approvals required
 | Tier | APY | VP Multiplier | Lock | PoP |
 |---|---|---|---|---|
 | Flexible | 5% | 1.0x | None | Vote or delegate required |
-| Lock30 | 10% | 1.5x | 30 days | Auto |
-| Lock90 | 20% | 2.0x | 90 days | Auto |
-| Lock180 | 35% | 3.0x | 180 days | Auto |
+| Lock30 | 10% | 1.1x | 30 days | Auto |
+| Lock90 | 20% | 1.3x | 90 days | Auto |
+| Lock180 | 35% | 1.5x | 180 days | Auto |
 
 - Position-based: one wallet can hold multiple positions
 - Snapshot VP: agent voting power is locked at proposal creation (flash-stake proof)
-- User Agents: anyone can register a custom AI agent and earn 3% creator reward from staking delegations
-- Top 5 agents by delegated VP are ranked: 1st · 2nd · 3rd · 4th · 5th
+- **7-day unstake cooldown**: request unstake → 7-day wait → complete unstake
+- Staking history: full transaction record with timestamps
+- **User Agents**: register a custom AI agent and earn 3% creator reward from delegations
+
+---
+
+## Pages
+
+| Route | Description |
+|---|---|
+| `/` | Landing page — Genesis 5, animated counters, CTA |
+| `/app` | Dashboard — proposal feed, submit modal |
+| `/proposals/[id]` | Proposal detail — senate voting, relay debate, execution |
+| `/sentinel` | Sentinel AI scanner + token stats + past proposals |
+| `/stake` | Staking dashboard — 4-tier staking, delegation, history |
+| `/agents` | AI Agent Hub — Browse Genesis 5 + Create custom agents + My Agent |
+| `/projects` | Multi-tenant registry — registered projects + onboarding |
+| `/onchain` | OKX OnchainOS — market data, wallet portfolio |
 
 ---
 
@@ -100,16 +135,28 @@ Result: dedicated staking contract + access to Genesis 5 senate
 
 ---
 
+## Smart Contracts (X Layer Mainnet — chainId 196)
+
+| Contract | Address |
+|---|---|
+| XToken (XSEN) | `0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b` |
+| XSenateStaking | `0x9CD9eF69c4EE176c8115E4BCf6c604Eb46599502` |
+| XSenateGovernor | `0xa140f36Cc529e6487b877547A543213aD2ae39dF` |
+| XSenateRegistry | `0xFd11e955CCEA6346911F33119B3bf84b3f0E6678` |
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
 | Frontend | Next.js 16, React 19, Tailwind CSS |
-| API | Next.js API Routes (Vercel Serverless) |
+| API | Next.js Serverless Functions |
 | Database | Neon Postgres |
 | AI | Anthropic Claude (claude-sonnet-4-6) |
 | Blockchain | X Layer (OKX L2, chainId 196) |
 | Contracts | Solidity 0.8.20 |
+| Web3 | ethers.js v6 |
 | Deployment | Vercel |
 
 ---
@@ -126,66 +173,16 @@ npm run dev
 
 Open http://localhost:3000
 
-### Environment Variables
-
-```
-ANTHROPIC_API_KEY=sk-ant-...
-CLAUDE_MODEL=claude-sonnet-4-6
-DATABASE_URL=postgres://...
-
-# After contract deployment:
-XSEN_TOKEN_ADDRESS=0x...
-XSEN_STAKING_ADDRESS=0x...
-XSEN_REGISTRY_ADDRESS=0x...
-XLAYER_RPC_URL=https://rpc.xlayer.tech
-XLAYER_PRIVATE_KEY=0x...
-```
-
----
-
-## Smart Contract Deployment
-
-```bash
-cd backend
-pip install -r requirements.txt
-python scripts/deploy_contract.py
-```
-
-Deploys in order:
-1. XToken (XSEN ERC20 + vesting)
-2. XSenateStaking (4-tier position staking)
-3. XSenateGovernor (multi-tenant AI voting)
-4. XSenateRegistry (permissionless project directory)
-
----
-
-## Repository Structure
-
-```
-x-senate/
-├── contracts/              Solidity contracts
-│   ├── XToken.sol
-│   ├── XSenateStaking.sol
-│   ├── XSenateGovernor.sol
-│   └── XSenateRegistry.sol
-├── frontend/               Next.js app
-│   ├── app/               Pages + API routes
-│   ├── lib/               DB, agents, contract helpers
-│   └── types/             TypeScript interfaces
-├── backend/               Contract deployment scripts
-│   └── scripts/
-└── X-SENATE-PLAN.md       Full project plan
-```
-
 ---
 
 ## OKX Integration
 
 - **X Layer** — deployed on OKX's EVM L2 (chainId 196)
+- **OKX Wallet** — native wallet connection with auto chain switch
 - **OKX Market API** — real-time token price feeds
 - **OKX Wallet API** — portfolio and transaction data
 - **OKX Security Scan** — token contract security check on project registration
 
 ---
 
-*Built for the OKX × X Layer Hackathon 2025*
+*Built for the OKX × X Layer OnchainOS AI Hackathon 2026 by Team QuackAI*

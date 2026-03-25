@@ -14,7 +14,7 @@ X-Senate is a permissionless AI governance platform built on X Layer. Any ERC20 
 
 The platform's core insight is that most DAOs fail not because token holders don't care, but because governance participation is too slow, too complex, and too easy to manipulate. X-Senate replaces manual human voting with **Genesis 5** — five specialized AI agents that independently analyze every proposal from different angles, then debate and decide by majority vote.
 
-This is not a single-project tool. It is shared infrastructure. Every project that joins strengthens the ecosystem, and the platform fee flows directly back to XSEN stakers.
+Beyond Genesis 5, **anyone can build their own governance AI agent** using the visual personality builder — choose a focus area, set voting weights with sliders, write a mandate, and register. Your agent earns 3% creator rewards from every delegator.
 
 ---
 
@@ -40,6 +40,7 @@ X-Senate provides a **shared AI governance layer** where:
 4. **On-chain execution** records approved proposals with a verifiable audit trail
 5. **Staking with Snapshot VP** prevents flash-stake attacks at the governance layer
 6. **Permissionless Registry** lets any X Layer project plug in for 1,000 XSEN
+7. **Custom AI Agent Builder** — visual builder to create and register personal governance agents
 
 ---
 
@@ -51,8 +52,8 @@ X-Senate provides a **shared AI governance layer** where:
 │                  (x-senate.vercel.app)                        │
 │                                                              │
 │   Next.js 16 App Router                                      │
-│   ├── /app/               React UI (7 pages)                 │
-│   ├── /app/api/           18 Serverless API Routes           │
+│   ├── /app/               React UI (9 pages)                 │
+│   ├── /app/api/           20+ Serverless API Routes          │
 │   └── /lib/               DB · AI Agents · Web3 Helpers      │
 │                                                              │
 │   Neon Postgres            proposals, agent votes, debates   │
@@ -74,6 +75,7 @@ X-Senate provides a **shared AI governance layer** where:
 - No separate backend server — all logic runs in Next.js Serverless Functions
 - Contracts are shared across projects — one governor, one registry, per-project staking
 - SSE (Server-Sent Events) for real-time streaming — compatible with Vercel's edge runtime
+- Global wallet state via React Context — connect once, works across all pages
 
 ---
 
@@ -115,6 +117,37 @@ Each agent is powered by `claude-sonnet-4-6` with a distinct system prompt that 
 
 ---
 
+## Custom AI Agent Builder
+
+Beyond Genesis 5, anyone can create and register governance agents:
+
+```
+Step 1: Basic Info
+  ├── Agent Name (unique)
+  └── Focus Area: Security / DeFi / Technical / Community / Ecosystem / Risk / Innovation
+
+Step 2: Personality Builder
+  ├── Style: Conservative ←──────────── Progressive (0-100 slider)
+  ├── Voting Weights (4 sliders, auto-normalize to 100%):
+  │   Security   ████░░  35%
+  │   Economics  ██░░░░  20%
+  │   Community  ████████ 40%
+  │   Technical  ░░░░░░   5%
+  └── Mandate: "My agent votes to protect small holders above all else"
+
+Step 3: Preview
+  ├── Auto-generated system prompt (collapsible)
+  └── Mock vote: "Increase staking reward 15% → Approve / 78% confidence"
+
+Register → POST /api/uga/register
+```
+
+Auto-generated system prompt follows Genesis 5 format — the `buildSystemPrompt()` function maps slider values to personality descriptions and voting weight breakdowns.
+
+**Creator rewards:** When a delegator stakes to your agent, 3% additional XSEN flows to you from the ecosystem fund on every reward claim.
+
+---
+
 ## Staking System
 
 ### 4-Tier Position-Based Staking
@@ -128,15 +161,9 @@ Each agent is powered by `claude-sonnet-4-6` with a distinct system prompt that 
 
 - **Position-based:** One wallet can hold multiple positions across different tiers simultaneously
 - **Per-second accrual:** Rewards accumulate continuously, claimable at any time
+- **7-day unstake cooldown:** Request unstake → 7-day wait → Complete unstake (UI-enforced)
 - **Early exit penalty:** Unstaking before lock expiry forfeits all accumulated rewards for that position
-- **Minimum stake:** 100 XSEN per position
-
-### Proof of Participation (PoP)
-Flexible stakers must prove participation to claim rewards. PoP is satisfied by:
-- Delegating a position to any registered agent
-- Casting a direct governance vote
-
-Lock30, Lock90, and Lock180 stakers automatically qualify — commitment is the participation.
+- **Staking history:** Full transaction record with timestamps and amounts
 
 ### Voting Power (VP)
 ```
@@ -145,29 +172,8 @@ Example: 1,000 XSEN in Lock90  → 1,300 VP
 Example: 1,000 XSEN in Lock180 → 1,500 VP (maximum)
 ```
 
-**Design rationale:** Multipliers are intentionally modest (max 1.5x). Long-term staking is rewarded, but governance power should reflect economic stake, not just lock duration.
-
 ### Snapshot VP — Flash-Stake Protection
-When a proposal is registered, the governor calls `snapshotForProposal()` on the staking contract. This records each agent's current delegated VP at that moment. All voting uses the **snapshot values** — not current live values. Staking or unstaking after proposal creation has zero effect on that vote outcome.
-
-### Epoch System
-- 30-day epochs
-- Each epoch has a dedicated reward pool funded from the treasury
-- Agent voting records reset at epoch boundary
-- Agent leaderboard rankings update at epoch end
-
-### Agent Delegation & Leaderboard
-Users delegate their staking positions to registered agents. Delegated VP accumulates on the agent, determining their leaderboard rank.
-
-**Top 5 agents ranked: 1st · 2nd · 3rd · 4th · 5th**
-
-### User Agent Creator Rewards
-Beyond the Genesis 5 platform agents, **anyone can register a custom AI agent**:
-
-- Register with a name — no fee, permissionless
-- Users delegate staking VP to your agent
-- When a delegator claims their staking reward, **3% additional** is credited to the agent creator from the ecosystem fund
-- The delegator receives **100% of their reward** — the creator bonus is additive, not a cut
+When a proposal is registered, the governor calls `snapshotForProposal()` on the staking contract. This records each agent's current delegated VP at that moment. All voting uses the **snapshot values** — staking or unstaking after proposal creation has zero effect on that vote outcome.
 
 ---
 
@@ -183,60 +189,6 @@ Beyond the Genesis 5 platform agents, **anyone can register a custom AI agent**:
 | XSenateRegistry | `0xFd11e955CCEA6346911F33119B3bf84b3f0E6678` |
 | Deployer | `0x8266D8e3B231dfD16fa21e40Cc3B99F38bC4B6C2` |
 
-### XToken.sol
-Standard ERC20 with linear vesting schedule support.
-```
-Total Supply:  100,000,000 XSEN
-Extra:         createVesting(), releaseVested(), releasableAmount()
-```
-
-### XSenateStaking.sol
-Core staking logic. Position-based, multi-tier, with full snapshot VP and agent system.
-
-Key functions:
-```solidity
-stake(amount, tier)                   // Create new position
-unstake(positionId)                   // Close position (penalty if early)
-claimReward(positionId)               // Claim accrued rewards
-claimAllRewards()                     // Claim across all positions
-delegatePosition(positionId, agent)   // Delegate VP to agent
-snapshotForProposal(proposalId)       // Lock agent VP at proposal creation
-registerGenesisAgent(name)            // Owner: add Genesis 5 agent
-registerUserAgent(name)               // Anyone: register custom agent
-claimCreatorReward(agentName)         // Agent creator: withdraw earnings
-getEffectiveVP(address)               // Total VP for a wallet
-```
-
-### XSenateGovernor.sol
-Multi-tenant governance hub. One contract serves all registered projects.
-
-### XSenateRegistry.sol
-Permissionless project directory. Registration fee: 1,000 XSEN → XSEN ecosystem fund.
-
----
-
-## Manual Proposal Submission
-
-Any token holder can submit a proposal manually via Sentinel AI gate:
-
-1. User fills in: title, summary, motivation, proposed action, risks
-2. Sentinel AI scores 0–100 and decides `approved: true/false`
-3. **Rejected:** 422 with score, feedback, concerns — not saved
-4. **Approved:** saved as `Draft`, user must stake 1,000 XSEN and call `registerProposal()` on-chain
-
----
-
-## Multi-Tenant Platform
-
-```
-1. Deploy your ERC20 token on X Layer
-2. X-Senate deploys a dedicated XSenateStaking contract for your token
-3. Pay 1,000 XSEN registration fee
-4. Your project is live in the registry
-5. Your token holders can stake, earn, and govern
-6. Genesis 5 AI senate reviews your proposals
-```
-
 ---
 
 ## Pages & Features
@@ -246,38 +198,36 @@ Any token holder can submit a proposal manually via Sentinel AI gate:
 | `/` | Landing page — particle canvas, Genesis 5, animated counters, CTA | ✅ Complete |
 | `/app` | Dashboard — proposal feed, submit modal | ✅ Complete |
 | `/proposals/[id]` | Proposal detail — senate voting, relay debate, execution | ✅ Complete |
-| `/proposals/[id]/senate` | Live senate vote stream (SSE) | ✅ Complete |
-| `/proposals/[id]/debate` | Relay debate stream (SSE) | ✅ Complete |
-| `/proposals/[id]/execute` | On-chain execution + reflection | ✅ Complete |
-| `/sentinel` | Sentinel AI scanner | ✅ Complete |
-| `/stake` | Staking dashboard — Stargate-style hero, wallet connect, delegate | ✅ Complete |
-| `/projects` | Platform directory — registered projects + registration form | ✅ Complete |
-| `/onchain` | OKX OnchainOS market data, wallet, contract state | ✅ Complete |
+| `/sentinel` | Sentinel AI scanner, token stats, proposal stats, past proposals table | ✅ Complete |
+| `/stake` | 4-tier staking, 7-day cooldown, history, delegation, wallet connect | ✅ Complete |
+| `/agents` | AI Agent Hub — Browse Genesis 5 + Create agents + My Agent | ✅ Complete |
+| `/projects` | Multi-tenant registry — project list + registration | ✅ Complete |
+| `/onchain` | OKX OnchainOS market data, wallet portfolio | ✅ Complete |
 
 ---
 
-## API Routes (18 Serverless Functions)
+## API Routes
 
 | Endpoint | Method | Description |
 |---|---|---|
 | `/api/proposals` | GET, POST | List proposals, create proposal |
 | `/api/proposals/[id]` | GET, DELETE | Single proposal CRUD |
-| `/api/proposals/submit` | GET, POST | Manual proposal — Sentinel AI gate |
+| `/api/proposals/submit` | POST | Manual proposal — Sentinel AI gate |
 | `/api/proposals/sentinel/scan` | POST | Run Sentinel AI scan |
-| `/api/senate/review/[id]` | POST | Trigger senate vote (SSE stream) |
+| `/api/senate/review/[id]` | GET (SSE) | Senate vote stream |
 | `/api/senate/votes/[id]` | GET | Agent vote results |
 | `/api/debate/start/[id]` | POST | Start relay debate |
-| `/api/debate/stream/[id]` | GET | Debate SSE stream |
+| `/api/debate/stream/[id]` | GET (SSE) | Debate stream |
+| `/api/debate/turns/[id]` | GET | Debate turn history |
 | `/api/execute/[id]` | POST | Execute approved proposal on-chain |
-| `/api/staking/tiers` | GET | Tier configuration |
-| `/api/staking/epoch` | GET | Current epoch info |
-| `/api/staking/totals` | GET | TVL, total VP |
-| `/api/staking/leaderboard` | GET | Agent rankings |
-| `/api/staking/positions/[addr]` | GET | Wallet positions |
-| `/api/staking/vp/[addr]` | GET | Effective VP for address |
+| `/api/execute/reflect/[id]` | POST | Post-vote reflection |
+| `/api/personas` | GET | Genesis 5 agent personas |
+| `/api/uga/` | GET | List community agents |
+| `/api/uga/register` | POST | Register custom agent |
 | `/api/registry/projects` | GET, POST | Project list, register project |
-| `/api/registry/projects/[id]` | GET | Project detail |
 | `/api/registry/stats` | GET | Platform-wide statistics |
+| `/api/staking/leaderboard` | GET | Agent rankings |
+| `/api/onchain/wallet/[addr]/activity` | GET | Staking transaction history |
 
 ---
 
@@ -286,26 +236,28 @@ Any token holder can submit a proposal manually via Sentinel AI gate:
 | Category | What's Done |
 |---|---|
 | **Smart Contracts** | All 4 contracts deployed to X Layer mainnet |
-| **Contract Addresses** | XToken, Staking, Governor, Registry live on chainId 196 |
 | **Staking Design** | 4-tier, snapshot VP, user agents, creator rewards, epoch system |
 | **AI Agents** | All 5 Genesis personas with full chain-of-thought |
 | **Senate Review** | Live SSE streaming, vote persistence, tally logic |
 | **Relay Debate** | Sequential argumentation with SSE streaming |
-| **Sentinel** | Community signal scanning, Claude-powered proposal generation |
+| **Sentinel** | Community signal scanning, Claude-powered proposal generation, token stats |
 | **Execution** | On-chain proposal recording, reflection phase |
 | **Multi-tenant** | Registry contract, per-project governance routing |
-| **Database** | Neon Postgres — proposals, agent_votes, debate_turns |
+| **Database** | Neon Postgres — proposals, agent_votes, debate_turns, UGAs |
 | **Deployment** | Vercel production live at x-senate.vercel.app |
 | **Landing Page** | Particle canvas, scroll reveal, 3D tilt cards, Genesis 5, animated counters |
-| **Header** | Redesigned with X Layer logo SVG, chronological nav (01–04), active state |
-| **Staking Dashboard** | Stargate-style hero — global stats + personal stats side by side |
-| **Wallet Connect** | MetaMask + OKX Wallet selection modal, auto X Layer chain switch |
-| **Delegate UI** | One-click agent delegation from stake page with live VP display |
-| **VP Multiplier Bar** | Visual progress bar showing 1.0x–1.5x range per tier |
-| **Manual Proposals** | Sentinel AI gate with score/feedback/rejection flow |
-| **Proposal Threshold** | 1,000 XSEN enforced off-chain (API) + on-chain (Governor) |
-| **Environment Variables** | All contract addresses + NEXT_PUBLIC_ vars set in Vercel |
-| **Documentation** | README, X-SENATE-PLAN.md, architecture docs |
+| **NavBar** | X Layer logo, wallet connect button (global, persistent across all pages) |
+| **Wallet Connect** | MetaMask + OKX Wallet with real logos, auto X Layer chain switch |
+| **Global Wallet State** | React Context (WalletContext) — connect once, works everywhere |
+| **Staking Dashboard** | Stargate-style hero — global stats + personal stats |
+| **7-day Unstake Cooldown** | Request → 7-day countdown → Complete (localStorage tracked) |
+| **Staking History** | Transaction timestamps, amounts, via OKLink API |
+| **Sentinel Redesign** | Full-width, token price card, proposal stats, past proposals table |
+| **Custom Agent Builder** | Visual builder with sliders, auto system prompt, mock vote preview |
+| **Community Agent Grid** | Browse + delegate UGAs, rank badges (Gold/Silver/Bronze) |
+| **My Agent Tab** | Personal agent stats, VP, participation rate |
+| **Governance Page** | Full-width layout (removed max-w-4xl) |
+| **Sample Proposals** | 3 demo proposals seeded (Approved, Debating, Draft) |
 
 ---
 
@@ -315,17 +267,16 @@ Any token holder can submit a proposal manually via Sentinel AI gate:
 
 | Item | Description |
 |---|---|
-| **Stake/Unstake TX** | Staking page reads contract data but cannot write stake/unstake yet |
+| **Stake/Unstake TX** | Staking page reads contract data but write transactions need wallet signing |
 | **Project registration on-chain** | Registration form UI exists; XSEN approval + tx flow needed |
 | **OKX x402 Payments** | x402 payment protocol for platform fees not yet integrated |
-| **IPFS upload** | Proposal content stored in DB; on-chain IPFS hash not yet pinned |
 
 ### 🟢 Nice-to-Have (Post-Hackathon)
 
 | Item | Description |
 |---|---|
 | Mobile optimization | Current layout is desktop-first |
-| OKX Market API on stake page | Real-time XSEN price feed |
+| Real XSEN price feed | Token not yet listed; price shows "not listed" |
 | Auth boundary | Write routes are currently open — acceptable for demo |
 
 ---
@@ -334,9 +285,11 @@ Any token holder can submit a proposal manually via Sentinel AI gate:
 
 | API | Usage |
 |---|---|
-| **Market API** | Real-time ETH/OKB price, K-line data on `/onchain` page |
-| **Wallet API** | Portfolio holdings for any address on X Layer |
-| **OKX Wallet** | Native wallet connection on staking page |
+| **X Layer Network** | Deployed on OKX's EVM L2 (chainId 196) |
+| **OKX Wallet** | Native wallet connection with auto chain switch |
+| **OKX Market API** | Real-time price data on /onchain page |
+| **OKX Wallet API** | Portfolio holdings, transaction history |
+| **OKLink API** | On-chain staking history for wallet activity |
 
 ---
 
@@ -345,11 +298,11 @@ Any token holder can submit a proposal manually via Sentinel AI gate:
 | Layer | Technology |
 |---|---|
 | Frontend | Next.js 16 (App Router), React 19, Tailwind CSS |
-| API | Next.js Serverless Functions (18 routes) |
-| Database | Neon Postgres (Vercel Storage integration) |
+| API | Next.js Serverless Functions |
+| Database | Neon Postgres |
 | AI | Anthropic Claude API — claude-sonnet-4-6 |
 | Blockchain | X Layer (OKX L2, chainId 196) |
-| Smart Contracts | Solidity 0.8.20, Hardhat 3 |
+| Smart Contracts | Solidity 0.8.20 |
 | Web3 | ethers.js v6 |
 | Streaming | Server-Sent Events (SSE) |
 | Deployment | Vercel |
@@ -365,21 +318,21 @@ Five AI agents with distinct personalities vote, debate, and execute governance 
 ### 2. Multi-Agent Collaboration Architecture
 Genesis 5 is a structured multi-agent system — not a single AI giving one answer, but five independent agents with different analytical lenses that must reach 3/5 consensus. The Relay Debate creates genuine agent-to-agent argumentation.
 
-### 3. OKX OnchainOS Integration
-- Deployed on X Layer mainnet (chainId 196)
-- OKX Market API for live price data
-- OKX Wallet API for portfolio tracking
-- OKX Wallet native connection on stake page
+### 3. User-Generated AI Agents
+Anyone can build their own governance AI agent using the visual personality builder. Agents compete in a leaderboard, earn creator rewards, and represent their delegators' values — creating a community layer on top of Genesis 5.
 
-### 4. Flash-Stake Protection (Novel Mechanism)
+### 4. OKX OnchainOS Integration
+- Deployed on X Layer mainnet (chainId 196)
+- OKX Wallet native connection with logo and auto chain switch
+- OKX Market API for live price data
+- OKLink API for on-chain transaction history
+
+### 5. Flash-Stake Protection (Novel Mechanism)
 Snapshot VP at proposal creation time prevents governance manipulation via token borrowing. This is a meaningful technical contribution to on-chain governance security.
 
-### 5. Permissionless Infrastructure
+### 6. Permissionless Infrastructure
 Any X Layer ERC20 project can register for 1,000 XSEN and immediately access the full governance stack — no whitelist, no approval process.
-
-### 6. Creator Economy for AI Agents
-Anyone can build and register a governance AI agent, earn 3% creator rewards from delegators, and compete in the agent leaderboard — aligning incentives for better governance outcomes.
 
 ---
 
-*Last updated: 2026-03-25 | Version: 0.3.0*
+*Last updated: 2026-03-25 | Version: 0.4.0*
