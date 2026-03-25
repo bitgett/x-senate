@@ -88,15 +88,6 @@ export default function NavBar() {
                     : "text-gray-400 hover:text-white hover:bg-white/5 border border-transparent hover:border-gray-700/60"
                 }`}
               >
-                {item.icon && (
-                  <Image
-                    src="/xlayer-logo.jpg"
-                    alt="X Layer"
-                    width={14}
-                    height={14}
-                    className={`rounded-sm object-cover mix-blend-luminosity transition-opacity ${isActive ? "opacity-100" : "opacity-50 group-hover:opacity-90"}`}
-                  />
-                )}
                 <span>{item.label}</span>
                 {item.num && (
                   <span className={`text-[9px] font-mono transition-colors ${isActive ? "text-purple-400" : "text-gray-600 group-hover:text-gray-400"}`}>
