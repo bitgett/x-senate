@@ -16,6 +16,91 @@ function fmtTime(iso: string) {
   return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
+function ProposalTimeline({ proposal, votes }: { proposal: Proposal; votes: AgentVote[] }) {
+  const steps = [
+    {
+      key: "submitted",
+      icon: "🔍",
+      label: "Sentinel Approved",
+      desc: proposal.sentinel_analysis ? "AI scan passed" : "Submitted",
+      time: proposal.created_at,
+      done: true,
+      color: "text-blue-400 border-blue-700/50 bg-blue-950/20",
+    },
+    {
+      key: "senate",
+      icon: "🏛️",
+      label: "Senate Review",
+      desc: votes.length > 0
+        ? `${proposal.approve_count}/${votes.length} Approve`
+        : "Pending",
+      time: votes[0]?.voted_at ?? null,
+      done: votes.length > 0,
+      color: votes.length > 0
+        ? (proposal.approve_count >= 3 ? "text-green-400 border-green-700/50 bg-green-950/20" : "text-red-400 border-red-700/50 bg-red-950/20")
+        : "text-gray-600 border-gray-800 bg-gray-900/20",
+    },
+    {
+      key: "debate",
+      icon: "⚡",
+      label: "Relay Debate",
+      desc: ["In_Debate", "Executed"].includes(proposal.status) ? "Completed" : "Pending",
+      time: null,
+      done: ["In_Debate", "Executed"].includes(proposal.status),
+      color: ["In_Debate", "Executed"].includes(proposal.status)
+        ? "text-purple-400 border-purple-700/50 bg-purple-950/20"
+        : "text-gray-600 border-gray-800 bg-gray-900/20",
+    },
+    {
+      key: "executed",
+      icon: "✅",
+      label: "Executed On-Chain",
+      desc: proposal.tx_hash ? `tx: ${proposal.tx_hash.slice(0, 8)}...` : "Pending",
+      time: proposal.status === "Executed" ? proposal.created_at : null,
+      done: proposal.status === "Executed",
+      color: proposal.status === "Executed"
+        ? "text-green-400 border-green-700/50 bg-green-950/20"
+        : "text-gray-600 border-gray-800 bg-gray-900/20",
+    },
+  ];
+
+  // Mark rejected path
+  const isRejected = proposal.status === "Rejected_Senate" || proposal.status === "Rejected";
+
+  return (
+    <div className="bg-gray-900/30 border border-gray-800/60 rounded-xl p-5">
+      <div className="text-[11px] text-gray-600 uppercase tracking-wider mb-4 font-semibold">Governance Timeline</div>
+      <div className="relative">
+        {/* connector line */}
+        <div className="absolute top-5 left-5 right-5 h-px bg-gray-800" style={{ zIndex: 0 }} />
+        <div className="flex justify-between relative" style={{ zIndex: 1 }}>
+          {steps.map((s, i) => {
+            const isBlocked = isRejected && i >= 2;
+            return (
+              <div key={s.key} className="flex flex-col items-center gap-2 flex-1">
+                <div className={`w-10 h-10 rounded-full border flex items-center justify-center text-base shrink-0 ${isBlocked ? "text-gray-700 border-gray-800 bg-gray-900" : s.color}`}>
+                  {isBlocked ? "✕" : s.icon}
+                </div>
+                <div className="text-center">
+                  <div className={`text-[11px] font-semibold ${isBlocked ? "text-gray-700" : s.done ? "text-white" : "text-gray-600"}`}>
+                    {s.label}
+                  </div>
+                  <div className={`text-[10px] mt-0.5 ${isBlocked ? "text-gray-800" : "text-gray-600"}`}>
+                    {isBlocked ? "Skipped" : s.desc}
+                  </div>
+                  {s.time && !isBlocked && (
+                    <div className="text-[10px] text-gray-700 mt-0.5">{fmtTime(s.time)}</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function VoteTallyBar({ approve, reject }: { approve: number; reject: number }) {
   const total = approve + reject;
   if (total === 0) return (
@@ -180,6 +265,9 @@ export default function ProposalDetail() {
         {/* Vote tally */}
         <VoteTallyBar approve={proposal.approve_count ?? 0} reject={proposal.reject_count ?? 0} />
       </div>
+
+      {/* Timeline */}
+      <ProposalTimeline proposal={proposal} votes={votes} />
 
       {/* Body sections */}
       {[

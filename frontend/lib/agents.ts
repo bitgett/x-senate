@@ -23,7 +23,7 @@ const KEYWORD_THRESHOLD = 5;
 // ─── Claude client ────────────────────────────────────────────────────────────
 
 function getClient() {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY ?? process.env.AI_Governance;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
   return new Anthropic({ apiKey });
 }
