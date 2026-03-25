@@ -50,7 +50,8 @@ export default function SentinelPage() {
   const [propsLoading, setPropsLoad] = useState(true);
   const [market, setMarket]       = useState<any>(null);
   const [gas, setGas]             = useState<any>(null);
-  const [xsenPrice, setXsenPrice] = useState<number | null>(null);
+  const [xsenPrice, setXsenPrice]       = useState<number | null>(null);
+  const [xsenPriceSource, setXsenPriceSource] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -64,7 +65,10 @@ export default function SentinelPage() {
       setTotals(tot);
       setMarket(mkt);
       setGas(g);
-      if (quote?.xsen_price_usd) setXsenPrice(quote.xsen_price_usd);
+      if (quote?.xsen_price_usd) {
+        setXsenPrice(quote.xsen_price_usd);
+        setXsenPriceSource(quote.price_source ?? null);
+      }
     }).finally(() => setPropsLoad(false));
   }, []);
 
@@ -197,10 +201,22 @@ export default function SentinelPage() {
             <div className="space-y-2 text-xs">
               <div className="flex justify-between items-center py-1.5 border-b border-gray-800/60">
                 <span className="text-gray-500">Price</span>
-                {xsenPrice
-                  ? <span className="text-white font-semibold">${xsenPrice < 0.01 ? xsenPrice.toFixed(6) : xsenPrice.toFixed(4)}</span>
-                  : <span className="text-gray-600">fetching...</span>
-                }
+                {xsenPrice ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-white font-semibold">
+                      ${xsenPrice < 0.001 ? xsenPrice.toFixed(6) : xsenPrice.toFixed(4)}
+                    </span>
+                    <span className={`text-[10px] rounded-full px-1.5 py-0.5 ${
+                      xsenPriceSource === "fallback"
+                        ? "bg-gray-800 text-gray-500"
+                        : "bg-green-900/40 text-green-400"
+                    }`}>
+                      {xsenPriceSource === "fallback" ? "fallback" : "live"}
+                    </span>
+                  </span>
+                ) : (
+                  <span className="text-gray-600 text-xs">fetching...</span>
+                )}
               </div>
               <div className="flex justify-between items-center py-1.5 border-b border-gray-800/60">
                 <span className="text-gray-500">Total Staked</span>
