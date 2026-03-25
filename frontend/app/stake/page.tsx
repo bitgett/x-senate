@@ -21,10 +21,10 @@ const TOKEN_ABI = [
 ];
 
 const TIER_INFO = [
-  { id: 0, name: "Flexible", days: 0,   apy: 5,  mult: 1.0, color: "border-gray-700 bg-gray-900/50",          badge: "bg-gray-700 text-gray-300",         glow: "" },
-  { id: 1, name: "Lock30",   days: 30,  apy: 10, mult: 1.5, color: "border-blue-700/50 bg-blue-950/30",        badge: "bg-blue-800 text-blue-200",         glow: "shadow-blue-900/20" },
-  { id: 2, name: "Lock90",   days: 90,  apy: 20, mult: 2.0, color: "border-purple-700/50 bg-purple-950/30",    badge: "bg-purple-800 text-purple-200",     glow: "shadow-purple-900/30" },
-  { id: 3, name: "Lock180",  days: 180, apy: 35, mult: 3.0, color: "border-yellow-600/50 bg-yellow-950/30",    badge: "bg-yellow-700 text-yellow-200",     glow: "shadow-yellow-900/20" },
+  { id: 0, name: "Flexible", days: 0,   apy: 5,  mult: 1.0, color: "border-gray-700 bg-gray-900/50",          badge: "bg-gray-700 text-gray-300" },
+  { id: 1, name: "Lock30",   days: 30,  apy: 10, mult: 1.1, color: "border-blue-700/50 bg-blue-950/30",        badge: "bg-blue-800 text-blue-200" },
+  { id: 2, name: "Lock90",   days: 90,  apy: 20, mult: 1.3, color: "border-purple-700/50 bg-purple-950/30",    badge: "bg-purple-800 text-purple-200" },
+  { id: 3, name: "Lock180",  days: 180, apy: 35, mult: 1.5, color: "border-yellow-600/50 bg-yellow-950/30",    badge: "bg-yellow-700 text-yellow-200" },
 ];
 
 const GENESIS_AGENTS = [
@@ -429,7 +429,7 @@ export default function StakePage() {
                     </div>
                     <div className="mt-3 h-1 bg-gray-800 rounded-full overflow-hidden">
                       <div className="h-full rounded-full bg-gradient-to-r from-purple-600 to-blue-400"
-                        style={{ width: `${((t.mult - 1) / 2) * 100}%` }}
+                        style={{ width: `${((t.mult - 1) / 0.5) * 100}%` }}
                       />
                     </div>
                   </div>
