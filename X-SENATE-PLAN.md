@@ -197,10 +197,11 @@ When a proposal is registered, the governor calls `snapshotForProposal()` on the
 |---|---|---|
 | `/` | Landing page — particle canvas, Genesis 5, animated counters, CTA | ✅ Complete |
 | `/app` | Dashboard — proposal feed, submit modal | ✅ Complete |
-| `/proposals/[id]` | Proposal detail — senate voting, relay debate, execution | ✅ Complete |
+| `/proposals/[id]` | Proposal detail — senate voting, relay debate, execution, timeline, bottom nav | ✅ Complete |
 | `/sentinel` | Sentinel AI scanner, token stats, proposal stats, past proposals table | ✅ Complete |
 | `/stake` | 4-tier staking, 7-day cooldown, history, delegation, wallet connect | ✅ Complete |
-| `/agents` | AI Agent Hub — Browse Genesis 5 + Create agents + My Agent | ✅ Complete |
+| `/agents` | AI Agent Hub — Browse Genesis 5 + Create agents + My Agent + Avatar Upload | ✅ Complete |
+| `/leaderboard` | 3-tab podium ranking (Agents / Stakers / Governance) with animations | ✅ Complete |
 | `/projects` | Multi-tenant registry — project list + registration | ✅ Complete |
 | `/onchain` | OKX OnchainOS market data, wallet portfolio | ✅ Complete |
 
@@ -258,6 +259,11 @@ When a proposal is registered, the governor calls `snapshotForProposal()` on the
 | **My Agent Tab** | Personal agent stats, VP, participation rate |
 | **Governance Page** | Full-width layout (removed max-w-4xl) |
 | **Sample Proposals** | 3 demo proposals seeded (Approved, Debating, Draft) |
+| **Governance Timeline** | 4-step visual timeline on proposal detail (Sentinel→Senate→Debate→Execute) |
+| **Proposal Detail Enhancements** | Proposer address, vote tally bar, AgentVoteCard expand/collapse, bottom navigation |
+| **Leaderboard** | `/leaderboard` — 3-tab podium: Agents (VP), Stakers (XSEN tokens), Governance (score) |
+| **NavBar Leaderboard Link** | Trophy icon with gold shimmer sweep effect, leftmost position |
+| **Stake Stats Bar Fix** | Stats bar constrained inside `max-w-5xl mx-auto` to prevent edge overflow |
 
 ---
 
@@ -335,4 +341,4 @@ Any X Layer ERC20 project can register for 1,000 XSEN and immediately access the
 
 ---
 
-*Last updated: 2026-03-25 | Version: 0.4.0*
+*Last updated: 2026-03-25 | Version: 0.5.0*

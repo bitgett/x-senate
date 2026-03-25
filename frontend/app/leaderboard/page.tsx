@@ -26,25 +26,25 @@ const RANK_BG: Record<number, string> = {
   2: "from-gray-800/40 to-gray-700/10",
   3: "from-orange-950/30 to-orange-900/10",
 };
-const RANK_MEDAL = ["🥇", "🥈", "🥉"];
+const RANK_MEDAL_COLOR = ["#eab308", "#9ca3af", "#c2773b"];
 const RANK_LABEL_COLOR: Record<number, string> = {
   1: "text-yellow-400",
   2: "text-gray-300",
   3: "text-orange-400",
 };
 
-// ── Shimmer animation component ───────────────────────────────────────────────
+// ── Medal SVG badge ────────────────────────────────────────────────────────────
 
 function ShimmerBadge({ rank }: { rank: number }) {
   if (rank > 3) return null;
-  const colors = {
-    1: "from-yellow-400 via-yellow-200 to-yellow-400",
-    2: "from-gray-400 via-gray-200 to-gray-400",
-    3: "from-orange-500 via-orange-300 to-orange-500",
-  };
+  const c = RANK_MEDAL_COLOR[rank - 1];
   return (
-    <div className={`text-2xl animate-bounce`} style={{ animationDelay: `${rank * 0.15}s`, animationDuration: "2s" }}>
-      {RANK_MEDAL[rank - 1]}
+    <div className="animate-bounce" style={{ animationDelay: `${rank * 0.15}s`, animationDuration: "2s" }}>
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="8" r="6" fill={c + "33"}/>
+        <path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/>
+        <text x="12" y="11" textAnchor="middle" fontSize="7" fontWeight="bold" fill={c} stroke="none">{rank}</text>
+      </svg>
     </div>
   );
 }
@@ -110,8 +110,8 @@ function PodiumCard({ entry, rank, type }: { entry: any; rank: number; type: "ag
         )}
 
         <div className={`mt-3 text-lg font-black ${RANK_LABEL_COLOR[rank] ?? "text-white"}`}>
-          <AnimCounter target={type === "agent" ? (entry.total_delegated_vp_xsen ?? 0) : (entry.vp ?? 0)} />
-          <span className="text-[11px] text-gray-500 font-normal ml-0.5">VP</span>
+          <AnimCounter target={type === "agent" ? (entry.total_delegated_vp_xsen ?? 0) : type === "staker" ? (entry.tokens ?? 0) : (entry.vp ?? 0)} />
+          <span className="text-[11px] text-gray-500 font-normal ml-0.5">{type === "staker" ? "XSEN" : "VP"}</span>
         </div>
         {type === "agent" && (
           <div className="text-[10px] text-gray-600 mt-0.5">
@@ -119,9 +119,11 @@ function PodiumCard({ entry, rank, type }: { entry: any; rank: number; type: "ag
           </div>
         )}
 
-        {/* Rank crown for #1 */}
+        {/* Crown icon for #1 */}
         {rank === 1 && (
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 text-lg">👑</div>
+          <div className="absolute -top-4 left-1/2 -translate-x-1/2">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="#eab308" stroke="#ca8a04" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M2 20h20M4 20l2-10 6 6 4-8 4 12"/></svg>
+          </div>
         )}
       </div>
 
@@ -142,9 +144,9 @@ function PodiumCard({ entry, rank, type }: { entry: any; rank: number; type: "ag
 function RankRow({ entry, rank, type, delay }: { entry: any; rank: number; type: "agent" | "staker" | "gov"; delay: number }) {
   const meta = PERSONA_META[entry.agent_name ?? entry.name];
   const vp = type === "agent" ? (entry.total_delegated_vp_xsen ?? 0)
-           : type === "staker" ? (entry.vp ?? 0)
+           : type === "staker" ? (entry.tokens ?? 0)
            : (entry.score ?? 0);
-  const maxVP = type === "agent" ? 4_200_000 : type === "staker" ? 500_000 : 1000;
+  const maxVP = type === "agent" ? 4_200_000 : type === "staker" ? 320_000 : 1000;
 
   return (
     <div
@@ -191,11 +193,11 @@ function RankRow({ entry, rank, type, delay }: { entry: any; rank: number; type:
         </div>
       </div>
 
-      {/* VP value */}
+      {/* Value */}
       <div className="text-right shrink-0">
         <div className="text-sm font-bold text-white">{fmt(vp)}</div>
         <div className="text-[10px] text-gray-600">
-          {type === "agent" ? "VP" : type === "staker" ? "VP" : "pts"}
+          {type === "agent" ? "VP" : type === "staker" ? "XSEN" : "pts"}
         </div>
       </div>
 
@@ -256,18 +258,18 @@ export default function LeaderboardPage() {
       .map((a, i) => ({ ...a, rank: i + 1 }));
   })();
 
-  // Mock staker leaderboard (realistic-looking demo data)
+  // Mock staker leaderboard (tokens = actual XSEN staked; vp = tokens * tier multiplier)
   const stakers = [
-    { rank: 1, name: "Whale #1",  wallet: "0x8266D8e3B231dfD16fa21e40Cc3B99F38bC4B6C2", vp: 480_000, tier: "Lock180", positions: 3 },
-    { rank: 2, name: "DeFi Dao",  wallet: "0x3f4C2e8f9bA1C6d5E9a7B4c3D8f1E2A5B6c7D9e0", vp: 312_500, tier: "Lock90",  positions: 2 },
-    { rank: 3, name: "Sentinel",  wallet: "0x7a8B9c0D1e2F3a4B5c6D7e8F9a0B1c2D3e4F5a6B", vp: 195_000, tier: "Lock90",  positions: 1 },
-    { rank: 4, name: "0x4f2…",   wallet: "0x4f2e1D9c8B7a6E5f4D3c2B1a0e9D8c7B6a5F4e3D", vp: 143_000, tier: "Lock30",  positions: 2 },
-    { rank: 5, name: "0xb3a…",   wallet: "0xb3a2E1D9c8B7A6e5F4d3C2b1A0e9D8C7b6a5F4e3", vp: 98_700,  tier: "Lock180", positions: 1 },
-    { rank: 6, name: "0x92c…",   wallet: "0x92cD3e4F5a6B7c8D9e0F1a2B3c4D5e6F7a8B9c0D", vp: 76_200,  tier: "Lock30",  positions: 1 },
-    { rank: 7, name: "0xf1a…",   wallet: "0xf1a2B3c4D5e6F7a8B9c0D1e2F3a4B5c6D7e8F9a0", vp: 61_500,  tier: "Flex",    positions: 1 },
-    { rank: 8, name: "0xc5d…",   wallet: "0xc5d6E7f8A9b0C1d2E3f4A5b6C7d8E9f0A1b2C3d4", vp: 54_300,  tier: "Lock30",  positions: 2 },
-    { rank: 9, name: "0x2e8…",   wallet: "0x2e8F9a0B1c2D3e4F5a6B7c8D9e0F1a2B3c4D5e6F", vp: 42_100,  tier: "Lock90",  positions: 1 },
-    { rank: 10, name: "0x6b1…",  wallet: "0x6b1C2d3E4f5A6b7C8d9E0f1A2b3C4d5E6f7A8b9C", vp: 33_800,  tier: "Flex",    positions: 1 },
+    { rank: 1,  name: "Whale #1",  wallet: "0x8266D8e3B231dfD16fa21e40Cc3B99F38bC4B6C2", tokens: 320_000, vp: 480_000, tier: "Lock180", positions: 3 },
+    { rank: 2,  name: "DeFi Dao",  wallet: "0x3f4C2e8f9bA1C6d5E9a7B4c3D8f1E2A5B6c7D9e0", tokens: 240_385, vp: 312_500, tier: "Lock90",  positions: 2 },
+    { rank: 3,  name: "Sentinel",  wallet: "0x7a8B9c0D1e2F3a4B5c6D7e8F9a0B1c2D3e4F5a6B", tokens: 150_000, vp: 195_000, tier: "Lock90",  positions: 1 },
+    { rank: 4,  name: "0x4f2…",   wallet: "0x4f2e1D9c8B7a6E5f4D3c2B1a0e9D8c7B6a5F4e3D", tokens: 130_000, vp: 143_000, tier: "Lock30",  positions: 2 },
+    { rank: 5,  name: "0xb3a…",   wallet: "0xb3a2E1D9c8B7A6e5F4d3C2b1A0e9D8C7b6a5F4e3", tokens: 65_800,  vp: 98_700,  tier: "Lock180", positions: 1 },
+    { rank: 6,  name: "0x92c…",   wallet: "0x92cD3e4F5a6B7c8D9e0F1a2B3c4D5e6F7a8B9c0D", tokens: 69_273,  vp: 76_200,  tier: "Lock30",  positions: 1 },
+    { rank: 7,  name: "0xf1a…",   wallet: "0xf1a2B3c4D5e6F7a8B9c0D1e2F3a4B5c6D7e8F9a0", tokens: 61_500,  vp: 61_500,  tier: "Flex",    positions: 1 },
+    { rank: 8,  name: "0xc5d…",   wallet: "0xc5d6E7f8A9b0C1d2E3f4A5b6C7d8E9f0A1b2C3d4", tokens: 49_364,  vp: 54_300,  tier: "Lock30",  positions: 2 },
+    { rank: 9,  name: "0x2e8…",   wallet: "0x2e8F9a0B1c2D3e4F5a6B7c8D9e0F1a2B3c4D5e6F", tokens: 32_385,  vp: 42_100,  tier: "Lock90",  positions: 1 },
+    { rank: 10, name: "0x6b1…",   wallet: "0x6b1C2d3E4f5A6b7C8d9E0f1A2b3C4d5E6f7A8b9C", tokens: 33_800,  vp: 33_800,  tier: "Flex",    positions: 1 },
   ];
 
   // Governance contribution score
@@ -354,7 +356,8 @@ export default function LeaderboardPage() {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-2xl font-black text-white flex items-center gap-2">
-              🏆 Leaderboard
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#eab308" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/></svg>
+              Leaderboard
             </h1>
             <p className="text-sm text-gray-500 mt-1">
               Top agents, stakers, and governance contributors on X-Senate
@@ -373,19 +376,32 @@ export default function LeaderboardPage() {
         {/* Tabs */}
         <div className="flex gap-0 mt-5">
           {([
-            { key: "agents",     label: "🤖 Agents",      count: allAgents.length },
-            { key: "stakers",    label: "⚡ Stakers",     count: stakers.length },
-            { key: "governance", label: "📋 Governance",  count: govContributors.length },
+            {
+              key: "agents", count: allAgents.length,
+              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><line x1="12" y1="7" x2="12" y2="11"/><line x1="8" y1="15" x2="8" y2="17"/><line x1="16" y1="15" x2="16" y2="17"/></svg>,
+              label: "Agents",
+            },
+            {
+              key: "stakers", count: stakers.length,
+              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
+              label: "Stakers",
+            },
+            {
+              key: "governance", count: govContributors.length,
+              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
+              label: "Governance",
+            },
           ] as const).map(t => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all ${
+              className={`flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border-b-2 transition-all ${
                 tab === t.key ? "border-purple-500 text-white" : "border-transparent text-gray-500 hover:text-gray-300"
               }`}
             >
+              {t.icon}
               {t.label}
-              <span className="ml-2 text-[10px] text-gray-600">({t.count})</span>
+              <span className="ml-1 text-[10px] text-gray-600">({t.count})</span>
             </button>
           ))}
         </div>
@@ -474,11 +490,13 @@ export default function LeaderboardPage() {
 
           {/* CTA */}
           <div className="flex gap-3 justify-center">
-            <Link href="/stake" className="text-xs bg-purple-600 hover:bg-purple-500 text-white font-semibold px-5 py-2.5 rounded-full transition-colors">
-              ⚡ Stake to Earn VP
+            <Link href="/stake" className="flex items-center gap-1.5 text-xs bg-purple-600 hover:bg-purple-500 text-white font-semibold px-5 py-2.5 rounded-full transition-colors">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Stake to Earn VP
             </Link>
-            <Link href="/agents" className="text-xs border border-gray-700 hover:border-gray-500 text-gray-300 font-semibold px-5 py-2.5 rounded-full transition-colors">
-              🤖 Create Agent
+            <Link href="/agents" className="flex items-center gap-1.5 text-xs border border-gray-700 hover:border-gray-500 text-gray-300 font-semibold px-5 py-2.5 rounded-full transition-colors">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><line x1="12" y1="7" x2="12" y2="11"/></svg>
+              Create Agent
             </Link>
           </div>
         </div>

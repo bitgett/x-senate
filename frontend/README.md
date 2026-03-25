@@ -32,14 +32,15 @@ XLAYER_PRIVATE_KEY=0x...
 | Route | Description |
 |---|---|
 | `/` | Dashboard — proposal list, platform stats |
-| `/proposals/[id]` | Proposal detail — senate voting, relay debate |
+| `/proposals/[id]` | Proposal detail — senate voting, relay debate, timeline, bottom nav |
 | `/proposals/[id]/senate` | Live senate vote stream |
 | `/proposals/[id]/debate` | Relay debate stream |
 | `/proposals/[id]/execute` | On-chain execution |
 | `/sentinel` | Sentinel AI scanner |
-| `/stake` | XSEN staking — tiers, positions, leaderboard |
+| `/stake` | XSEN staking — tiers, positions, delegation |
+| `/agents` | AI Agent Hub — Genesis 5 + Create custom agents + My Agent |
+| `/leaderboard` | Leaderboard — Agents / Stakers / Governance 3-tab podium |
 | `/projects` | Registered projects + registration form |
-| `/projects/[id]` | Per-project governance view |
 | `/onchain` | On-chain explorer |
 
 ## API Routes
@@ -60,6 +61,8 @@ All API is serverless via Next.js App Router:
 /api/staking/leaderboard GET
 /api/staking/positions/[addr] GET
 /api/staking/vp/[addr]  GET
+/api/uga                GET list all user agents
+/api/uga/register       POST create user agent
 /api/registry/projects  GET list, POST register
 /api/registry/projects/[id] GET
 /api/registry/stats     GET

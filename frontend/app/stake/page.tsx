@@ -318,18 +318,20 @@ export default function StakePage() {
       </div>
 
       {/* ── Protocol Stats Bar ── */}
-      <div className="grid grid-cols-4 divide-x divide-gray-800/60 border-b border-gray-800/40 bg-[#0a0a0f]">
-        {[
-          { label: "Total Staked",  value: fmt(totalStaked) + " XSEN", color: "text-white" },
-          { label: "Total VP",      value: fmt(totalVP),                color: "text-purple-300" },
-          { label: "Max APY",       value: "35%",                       color: "text-green-300" },
-          { label: "Active Agents", value: String(leaderboard.length),  color: "text-blue-300" },
-        ].map(s => (
-          <div key={s.label} className="px-6 py-4 text-center">
-            <div className={`text-2xl font-black ${s.color}`}>{s.value}</div>
-            <div className="text-xs text-gray-600 mt-0.5">{s.label}</div>
-          </div>
-        ))}
+      <div className="border-b border-gray-800/40 bg-[#0a0a0f]">
+        <div className="max-w-5xl mx-auto px-6 grid grid-cols-4 divide-x divide-gray-800/60">
+          {[
+            { label: "Total Staked",  value: fmt(totalStaked) + " XSEN", color: "text-white" },
+            { label: "Total VP",      value: fmt(totalVP),                color: "text-purple-300" },
+            { label: "Max APY",       value: "35%",                       color: "text-green-300" },
+            { label: "Active Agents", value: String(leaderboard.length),  color: "text-blue-300" },
+          ].map(s => (
+            <div key={s.label} className="px-4 py-4 text-center">
+              <div className={`text-2xl font-black ${s.color}`}>{s.value}</div>
+              <div className="text-xs text-gray-600 mt-0.5">{s.label}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* ── Tabs ── */}
