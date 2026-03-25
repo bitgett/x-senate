@@ -45,6 +45,7 @@ function shortAddr(addr: string) {
 
 export default function StakePage() {
   const [wallet, setWallet]       = useState<string | null>(null);
+  const [walletType, setWalletType] = useState<"metamask" | "okx" | null>(null);
   const [xsenBal, setXsenBal]     = useState<number>(0);
   const [effectiveVP, setVP]      = useState<number>(0);
   const [positions, setPositions] = useState<any[]>([]);
@@ -54,6 +55,12 @@ export default function StakePage() {
   const [delegating, setDelegating] = useState<string | null>(null);
   const [txStatus, setTxStatus]   = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [showWalletModal, setShowWalletModal] = useState(false);
+
+  function getProvider() {
+    if (walletType === "okx") return (window as any).okxwallet;
+    return (window as any).ethereum;
+  }
 
   // Load static data
   useEffect(() => {
@@ -68,9 +75,10 @@ export default function StakePage() {
     });
   }, []);
 
-  const loadWalletData = useCallback(async (address: string) => {
+  const loadWalletData = useCallback(async (address: string, type?: "metamask" | "okx") => {
     try {
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const raw = type === "okx" ? (window as any).okxwallet : (window as any).ethereum;
+      const provider = new ethers.BrowserProvider(raw);
       const token   = new ethers.Contract(TOKEN_ADDRESS,   TOKEN_ABI,   provider);
       const staking = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, provider);
 
@@ -97,28 +105,31 @@ export default function StakePage() {
     } catch (e) { console.error(e); }
   }, []);
 
-  async function connectWallet() {
-    if (!(window as any).ethereum) {
-      alert("MetaMask not detected. Please install MetaMask.");
+  async function connectWallet(type: "metamask" | "okx") {
+    setShowWalletModal(false);
+    const raw = type === "okx" ? (window as any).okxwallet : (window as any).ethereum;
+    if (!raw) {
+      alert(type === "okx" ? "OKX Wallet not detected. Please install OKX Wallet." : "MetaMask not detected. Please install MetaMask.");
       return;
     }
     setConnecting(true);
+    const XLAYER = {
+      chainId: "0xc4",
+      chainName: "X Layer Mainnet",
+      nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
+      rpcUrls: ["https://rpc.xlayer.tech"],
+      blockExplorerUrls: ["https://www.okx.com/web3/explorer/xlayer"],
+    };
     try {
-      // Switch to X Layer
       try {
-        await (window as any).ethereum.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: "0xc4" }], // 196
-        });
+        await raw.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0xc4" }] });
       } catch {
-        await (window as any).ethereum.request({
-          method: "wallet_addEthereumChain",
-          params: [{ chainId: "0xc4", chainName: "X Layer Mainnet", nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 }, rpcUrls: ["https://rpc.xlayer.tech"], blockExplorerUrls: ["https://www.okx.com/web3/explorer/xlayer"] }],
-        });
+        await raw.request({ method: "wallet_addEthereumChain", params: [XLAYER] });
       }
-      const accounts = await (window as any).ethereum.request({ method: "eth_requestAccounts" });
+      const accounts = await raw.request({ method: "eth_requestAccounts" });
       setWallet(accounts[0]);
-      await loadWalletData(accounts[0]);
+      setWalletType(type);
+      await loadWalletData(accounts[0], type);
     } catch (e: any) { console.error(e); }
     setConnecting(false);
   }
@@ -131,7 +142,7 @@ export default function StakePage() {
     setDelegating(agentName);
     setTxStatus(null);
     try {
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const provider = new ethers.BrowserProvider(getProvider());
       const signer = await provider.getSigner();
       const staking = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
       const tx = await staking.delegatePosition(activePos.id, agentName);
@@ -178,7 +189,7 @@ export default function StakePage() {
           </div>
         ) : (
           <button
-            onClick={connectWallet}
+            onClick={() => setShowWalletModal(true)}
             disabled={connecting}
             className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-xl transition-all hover:scale-105"
             style={{ boxShadow: "0 0 20px rgba(139,92,246,0.3)" }}
@@ -263,7 +274,7 @@ export default function StakePage() {
           {!wallet && (
             <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl p-6 text-center">
               <div className="text-gray-500 text-sm mb-3">Connect your wallet to delegate VP</div>
-              <button onClick={connectWallet} className="bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+              <button onClick={() => setShowWalletModal(true)} className="bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
                 Connect Wallet
               </button>
             </div>
@@ -382,5 +393,46 @@ export default function StakePage() {
       </div>
 
     </div>
+
+      {/* Wallet selection modal */}
+      {showWalletModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowWalletModal(false)}>
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-80 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="text-center mb-6">
+              <h3 className="text-lg font-bold text-white">Connect Wallet</h3>
+              <p className="text-xs text-gray-500 mt-1">Choose your wallet to connect to X Layer</p>
+            </div>
+            <div className="space-y-3">
+              <button
+                onClick={() => connectWallet("metamask")}
+                className="w-full flex items-center gap-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-orange-500/50 rounded-xl px-4 py-3.5 transition-all group"
+              >
+                <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-xl">
+                  🦊
+                </div>
+                <div className="text-left">
+                  <div className="font-semibold text-white text-sm">MetaMask</div>
+                  <div className="text-xs text-gray-500">Most popular browser wallet</div>
+                </div>
+              </button>
+              <button
+                onClick={() => connectWallet("okx")}
+                className="w-full flex items-center gap-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-blue-500/50 rounded-xl px-4 py-3.5 transition-all group"
+              >
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center font-black text-white text-sm">
+                  OKX
+                </div>
+                <div className="text-left">
+                  <div className="font-semibold text-white text-sm">OKX Wallet</div>
+                  <div className="text-xs text-gray-500">Native X Layer wallet</div>
+                </div>
+              </button>
+            </div>
+            <button onClick={() => setShowWalletModal(false)} className="w-full mt-4 text-xs text-gray-600 hover:text-gray-400 transition-colors py-2">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
   );
 }
