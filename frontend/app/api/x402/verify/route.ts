@@ -47,16 +47,20 @@ export async function POST(req: NextRequest) {
     const logs: any[] = receipt.logs ?? [];
     let amountWei = 0n;
 
+    const payer = from_address ? from_address.toLowerCase() : null;
+
     for (const log of logs) {
       if (
         log.address?.toLowerCase() === XSEN_ADDRESS &&
         log.topics?.[0] === TRANSFER_TOPIC &&
-        log.topics?.[2] // to address in topics[2]
+        log.topics?.[1] &&
+        log.topics?.[2]
       ) {
-        const toAddress = "0x" + log.topics[2].slice(26); // last 20 bytes
-        if (toAddress.toLowerCase() === TREASURY) {
-          amountWei += BigInt(log.data);
-        }
+        const fromAddr = ("0x" + log.topics[1].slice(26)).toLowerCase();
+        const toAddress = ("0x" + log.topics[2].slice(26)).toLowerCase();
+        if (toAddress !== TREASURY) continue;
+        if (payer && fromAddr !== payer) continue; // sender must match if provided
+        amountWei += BigInt(log.data);
       }
     }
 

@@ -14,6 +14,23 @@ type MessageItem = {
   classification: "governance" | "chatter";
 };
 
+// Normalize DB status (e.g. "In_Senate", "Rejected_Senate") to canonical keys
+function normalizeStatus(s: string): string {
+  const lower = (s ?? "draft").toLowerCase().replace(/[\s-]/g, "_");
+  const map: Record<string, string> = {
+    draft:            "draft",
+    in_senate:        "pending",
+    pending:          "pending",
+    in_debate:        "in_debate",
+    executed:         "executed",
+    approved:         "approved",
+    rejected_senate:  "rejected_by_ai",
+    rejected_by_ai:   "rejected_by_ai",
+    rejected:         "rejected_by_ai",
+  };
+  return map[lower] ?? "draft";
+}
+
 const STATUS_STYLE: Record<string, string> = {
   approved:       "bg-green-900/40 text-green-300 border-green-700/40",
   executed:       "bg-blue-900/40 text-blue-300 border-blue-700/40",
@@ -90,10 +107,10 @@ export default function SentinelPage() {
   }
 
   const totalProps    = proposals.length;
-  const approved      = proposals.filter(p => p.status === "approved" || p.status === "executed").length;
-  const rejected      = proposals.filter(p => p.status === "rejected_by_ai").length;
-  const inDebate      = proposals.filter(p => p.status === "in_debate").length;
-  const pending       = proposals.filter(p => p.status === "pending" || p.status === "draft").length;
+  const approved      = proposals.filter(p => ["approved", "executed"].includes(normalizeStatus(p.status))).length;
+  const rejected      = proposals.filter(p => normalizeStatus(p.status) === "rejected_by_ai").length;
+  const inDebate      = proposals.filter(p => normalizeStatus(p.status) === "in_debate").length;
+  const pending       = proposals.filter(p => ["pending", "draft"].includes(normalizeStatus(p.status))).length;
   const approvalRate  = totalProps > 0 ? Math.round((approved / totalProps) * 100) : 0;
   const totalStaked   = totals?.total_staked_xsen ?? 0;
 
@@ -303,12 +320,12 @@ export default function SentinelPage() {
                 <tbody>
                   {proposals.slice(0, 12).map((p: any) => {
                     const totalVotes = (p.approve_count ?? 0) + (p.reject_count ?? 0);
-                    const style = STATUS_STYLE[p.status] ?? "bg-gray-800 text-gray-400 border-gray-700";
+                    const style = STATUS_STYLE[normalizeStatus(p.status)] ?? "bg-gray-800 text-gray-400 border-gray-700";
                     return (
                       <tr key={p.id} className="border-b border-gray-800/30 hover:bg-gray-800/20 transition-colors">
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${style}`}>
-                            {STATUS_LABEL[p.status] ?? p.status}
+                            {STATUS_LABEL[normalizeStatus(p.status)] ?? p.status}
                           </span>
                         </td>
                         <td className="px-4 py-3">

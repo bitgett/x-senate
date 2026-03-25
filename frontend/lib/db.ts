@@ -81,7 +81,6 @@ export async function initSchema() {
     )
   `;
   await sql`ALTER TABLE proposals ADD COLUMN IF NOT EXISTS proposer_address TEXT`;
-  await sql`ALTER TABLE agent_votes ADD COLUMN IF NOT EXISTS voted_at TIMESTAMPTZ DEFAULT NOW()`;
   await sql`
     CREATE TABLE IF NOT EXISTS agent_votes (
       id               SERIAL PRIMARY KEY,
@@ -95,6 +94,7 @@ export async function initSchema() {
       voted_at         TIMESTAMPTZ DEFAULT NOW()
     )
   `;
+  await sql`ALTER TABLE agent_votes ADD COLUMN IF NOT EXISTS voted_at TIMESTAMPTZ DEFAULT NOW()`;
   await sql`
     CREATE TABLE IF NOT EXISTS debate_turns (
       id               SERIAL PRIMARY KEY,

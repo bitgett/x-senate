@@ -10,10 +10,12 @@ const FALLBACK_PRICE = 0.01;
 
 async function getRequiredXsenWei(): Promise<bigint> {
   try {
-    const res = await fetch(
-      "https://www.okx.com/api/v5/dex/market/price?chainIndex=196&tokenAddress=0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b",
-      { signal: AbortSignal.timeout(5000) }
-    );
+    const res = await fetch("https://web3.okx.com/api/v6/dex/market/price", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([{ chainIndex: "196", tokenContractAddress: XSEN_ADDRESS }]),
+      signal: AbortSignal.timeout(5000),
+    });
     const data = await res.json();
     const price = parseFloat(data?.data?.[0]?.price ?? "0");
     if (price > 0) return BigInt(Math.ceil((XSEN_USD_FEE / price) * 1e18));
@@ -48,9 +50,8 @@ async function verifyPayment(txHash: string, requiredWei: bigint): Promise<{ ok:
     if (received < requiredWei) return { ok: false, error: `Insufficient: got ${received}, need ${requiredWei}` };
     return { ok: true };
   } catch (e: any) {
-    // If RPC is slow/unavailable, allow through — payment was signed on frontend
-    console.warn("x402 verify warning (RPC timeout):", e.message);
-    return { ok: true };
+    console.error("x402 RPC error:", e.message);
+    return { ok: false, error: "Payment verification unavailable — please retry in a moment" };
   }
 }
 
