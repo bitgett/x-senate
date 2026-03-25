@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# X-Senate Frontend
 
-## Getting Started
+Next.js 16 app — frontend + API for the X-Senate AI Governance Platform.
 
-First, run the development server:
+## Development
 
 ```bash
+npm install
+cp .env.local.example .env.local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment Variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Create `frontend/.env.local`:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+ANTHROPIC_API_KEY=sk-ant-...
+CLAUDE_MODEL=claude-sonnet-4-6
+DATABASE_URL=postgres://...
 
-## Learn More
+# After contract deployment on X Layer:
+XSEN_TOKEN_ADDRESS=0x...
+XSEN_STAKING_ADDRESS=0x...
+XSEN_REGISTRY_ADDRESS=0x...
+XLAYER_RPC_URL=https://rpc.xlayer.tech
+XLAYER_PRIVATE_KEY=0x...
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Pages
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Route | Description |
+|---|---|
+| `/` | Dashboard — proposal list, platform stats |
+| `/proposals/[id]` | Proposal detail — senate voting, relay debate |
+| `/proposals/[id]/senate` | Live senate vote stream |
+| `/proposals/[id]/debate` | Relay debate stream |
+| `/proposals/[id]/execute` | On-chain execution |
+| `/sentinel` | Sentinel AI scanner |
+| `/stake` | XSEN staking — tiers, positions, leaderboard |
+| `/projects` | Registered projects + registration form |
+| `/projects/[id]` | Per-project governance view |
+| `/onchain` | On-chain explorer |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## API Routes
 
-## Deploy on Vercel
+All API is serverless via Next.js App Router:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+/api/proposals          GET list, POST create
+/api/proposals/[id]     GET single, DELETE
+/api/senate/review/[id] POST — triggers SSE senate vote stream
+/api/senate/votes/[id]  GET — agent vote results
+/api/debate/start/[id]  POST — start relay debate
+/api/debate/stream/[id] GET  — SSE debate stream
+/api/execute/[id]       POST — execute proposal on-chain
+/api/staking/tiers      GET
+/api/staking/epoch      GET
+/api/staking/totals     GET
+/api/staking/leaderboard GET
+/api/staking/positions/[addr] GET
+/api/staking/vp/[addr]  GET
+/api/registry/projects  GET list, POST register
+/api/registry/projects/[id] GET
+/api/registry/stats     GET
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Deploy
+
+Deployed on Vercel. Push to `main` triggers automatic deployment.
+
+Root Directory: `frontend`
