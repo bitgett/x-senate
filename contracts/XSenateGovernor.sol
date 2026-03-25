@@ -84,6 +84,9 @@ contract XSenateGovernor {
     // ─── State ────────────────────────────────────────────────────
     address public owner;
 
+    // Minimum XSEN staked to submit a proposal (default: 1,000 XSEN)
+    uint256 public proposalThreshold = 1000 * 1e18;
+
     // Genesis 5 registered agent addresses
     mapping(string => address) public agentAddresses;
     string[] public agentNames;
@@ -178,6 +181,13 @@ contract XSenateGovernor {
         registry = IXSenateRegistry(_registry);
     }
 
+    /**
+     * @notice Update the minimum staking amount required to submit a proposal.
+     */
+    function setProposalThreshold(uint256 _threshold) external onlyOwner {
+        proposalThreshold = _threshold;
+    }
+
     // ─── Agent Management ─────────────────────────────────────────
 
     /**
@@ -213,6 +223,15 @@ contract XSenateGovernor {
         require(bytes(proposalId).length > 0, "XSenate: empty id");
         require(bytes(projectId).length > 0,  "XSenate: empty projectId");
         require(bytes(title).length > 0,      "XSenate: empty title");
+
+        // Check proposer meets minimum staking threshold for this project
+        if (proposalThreshold > 0 && address(registry) != address(0)) {
+            address stakingAddr = registry.getStakingForProject(projectId);
+            if (stakingAddr != address(0)) {
+                uint256 stakedVP = IXSenateStaking(stakingAddr).getEffectiveVP(msg.sender);
+                require(stakedVP >= proposalThreshold, "XSenate: insufficient staked VP to propose");
+            }
+        }
 
         proposals[proposalId] = Proposal({
             proposalId:      proposalId,

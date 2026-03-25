@@ -44,7 +44,8 @@ contract XSenateStaking {
     uint256 public constant CREATOR_BONUS_BPS   = 300; // 3% from ecosystem fund to agent creator
 
     uint256[4] public APY_BPS     = [500, 1000, 2000, 3500];
-    uint256[4] public VP_MULT_X10 = [10, 15, 20, 30];
+    // VP multiplier * 10: 1.0x=10, 1.1x=11, 1.3x=13, 1.5x=15
+    uint256[4] public VP_MULT_X10 = [10, 11, 13, 15];
     uint256[4] public LOCK_SECS   = [0, 30 days, 90 days, 180 days];
 
     // ─── Enums ────────────────────────────────────────────────────
