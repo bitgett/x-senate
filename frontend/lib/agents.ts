@@ -41,7 +41,7 @@ export async function claudeComplete(system: string, user: string, maxTokens = 2
 
 export async function claudeCompleteJson(system: string, user: string, maxTokens = 1500): Promise<Record<string, unknown>> {
   const text = await claudeComplete(system, user + "\n\nRespond with valid JSON only.", maxTokens);
-  const match = text.match(/```(?:json)?\s*(\{.*?\})\s*```/s) ?? text.match(/\{.*\}/s);
+  const match = text.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/) ?? text.match(/\{[\s\S]*\}/);
   return JSON.parse(match ? (match[1] ?? match[0]) : text);
 }
 
@@ -202,7 +202,7 @@ Respond with valid JSON only:
 {"vote": "Approve" or "Reject", "reason": "concise 1-2 sentence reason", "chain_of_thought": "your detailed reasoning process (3-5 sentences)", "confidence": 0-100}`;
 
 function extractVoteJson(text: string): Record<string, unknown> {
-  const match = text.match(/```(?:json)?\s*(\{.*?\})\s*```/s) ?? text.match(/\{.*\}/s);
+  const match = text.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/) ?? text.match(/\{[\s\S]*\}/);
   return JSON.parse(match ? (match[1] ?? match[0]) : text);
 }
 
