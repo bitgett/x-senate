@@ -16,8 +16,8 @@ const NAV_ITEMS = [
   { href: "/app",         label: "Proposals",   num: "02" },
   { href: "/agents",      label: "Agents",      num: "03" },
   { href: "/stake",       label: "Stake",       num: "04" },
-  { href: "/projects",    label: "Projects",    num: null },
-  { href: "/activity",    label: "Activity",    num: null },
+  { href: "/projects",    label: "Projects",    num: "05" },
+  { href: "/activity",    label: "Activity",    num: "06" },
 ];
 
 export default function NavBar() {
