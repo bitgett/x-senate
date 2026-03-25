@@ -1,4 +1,4 @@
-import { XLayerLogo } from "./NavBar";
+import Image from "next/image";
 
 export default function Footer() {
   return (
@@ -10,9 +10,13 @@ export default function Footer() {
 
         {/* Left: branding */}
         <div className="flex items-center gap-3">
-          <div className="opacity-40">
-            <XLayerLogo height={18} color="#9ca3af" gradId="xlFooter" />
-          </div>
+          <Image
+            src="/xlayer-logo.jpg"
+            alt="X Layer"
+            width={22}
+            height={22}
+            className="rounded-sm object-cover mix-blend-luminosity opacity-40"
+          />
           <div className="text-xs leading-snug">
             <p className="text-gray-300 font-semibold tracking-tight">
               X-Senate — Built for X Layer.

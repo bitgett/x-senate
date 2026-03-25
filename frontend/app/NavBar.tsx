@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 
 /**
@@ -98,16 +99,14 @@ export default function NavBar() {
 
         {/* ── Logo ── */}
         <Link href="/" className="flex items-center gap-3 group">
-          <div className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-gray-900 border border-gray-700/60 group-hover:border-purple-500/50 transition-all overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-purple-600/10 group-hover:from-blue-600/20 group-hover:to-purple-600/20 transition-all" />
-            <div className="relative scale-75">
-              <XLayerLogo
-                height={24}
-                gradStart="#60a5fa"
-                gradEnd="#a78bfa"
-                gradId="xlNavLogo"
-              />
-            </div>
+          <div className="relative flex items-center justify-center w-9 h-9 rounded-xl overflow-hidden border border-gray-700/60 group-hover:border-purple-500/50 transition-all">
+            <Image
+              src="/xlayer-logo.jpg"
+              alt="X Layer"
+              width={36}
+              height={36}
+              className="object-cover mix-blend-luminosity opacity-80 group-hover:opacity-100 scale-110 transition-all"
+            />
           </div>
           <div className="flex flex-col leading-tight">
             <span className="font-bold text-white text-sm tracking-tight">X-Senate</span>
@@ -130,14 +129,13 @@ export default function NavBar() {
                 }`}
               >
                 {item.icon && (
-                  <span className={`transition-opacity ${isActive ? "opacity-100" : "opacity-60 group-hover:opacity-100"}`}>
-                    <XLayerLogo
-                      height={13}
-                      gradStart={isActive ? "#93c5fd" : "#60a5fa"}
-                      gradEnd={isActive ? "#c4b5fd" : "#a78bfa"}
-                      gradId={`xlNav${item.href.replace(/\//g, "")}`}
-                    />
-                  </span>
+                  <Image
+                    src="/xlayer-logo.jpg"
+                    alt="X Layer"
+                    width={14}
+                    height={14}
+                    className={`rounded-sm object-cover mix-blend-luminosity transition-opacity ${isActive ? "opacity-100" : "opacity-50 group-hover:opacity-90"}`}
+                  />
                 )}
                 <span>{item.label}</span>
                 {item.num && (
