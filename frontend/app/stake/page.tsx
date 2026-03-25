@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { ethers } from "ethers";
+import Link from "next/link";
 
 const STAKING_ADDRESS = process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS ?? "0x9CD9eF69c4EE176c8115E4BCf6c604Eb46599502";
 const TOKEN_ADDRESS   = process.env.NEXT_PUBLIC_XSEN_TOKEN_ADDRESS   ?? "0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b";
@@ -10,6 +11,7 @@ const STAKING_ABI = [
   "function getPositions(address user) view returns (tuple(uint256 id, uint256 amount, uint8 tier, uint256 lockEnd, string delegatedAgent, bool active, uint256 accReward)[])",
   "function delegatePosition(uint256 positionId, string agentName) external",
   "function stake(uint256 amount, uint8 tier) external",
+  "function unstake(uint256 positionId) external",
   "function claimAllRewards() external",
 ];
 
@@ -19,10 +21,10 @@ const TOKEN_ABI = [
 ];
 
 const TIER_INFO = [
-  { id: 0, name: "Flexible", days: 0,   apy: 5,  mult: 1.0, color: "border-gray-700 bg-gray-900/50",     badge: "bg-gray-700 text-gray-300" },
-  { id: 1, name: "Lock30",   days: 30,  apy: 10, mult: 1.1, color: "border-blue-700/50 bg-blue-950/30",  badge: "bg-blue-800 text-blue-200" },
-  { id: 2, name: "Lock90",   days: 90,  apy: 20, mult: 1.3, color: "border-purple-700/50 bg-purple-950/30", badge: "bg-purple-800 text-purple-200" },
-  { id: 3, name: "Lock180",  days: 180, apy: 35, mult: 1.5, color: "border-yellow-600/50 bg-yellow-950/30", badge: "bg-yellow-700 text-yellow-200" },
+  { id: 0, name: "Flexible", days: 0,   apy: 5,  mult: 1.0, color: "border-gray-700 bg-gray-900/50",          badge: "bg-gray-700 text-gray-300",         glow: "" },
+  { id: 1, name: "Lock30",   days: 30,  apy: 10, mult: 1.5, color: "border-blue-700/50 bg-blue-950/30",        badge: "bg-blue-800 text-blue-200",         glow: "shadow-blue-900/20" },
+  { id: 2, name: "Lock90",   days: 90,  apy: 20, mult: 2.0, color: "border-purple-700/50 bg-purple-950/30",    badge: "bg-purple-800 text-purple-200",     glow: "shadow-purple-900/30" },
+  { id: 3, name: "Lock180",  days: 180, apy: 35, mult: 3.0, color: "border-yellow-600/50 bg-yellow-950/30",    badge: "bg-yellow-700 text-yellow-200",     glow: "shadow-yellow-900/20" },
 ];
 
 const GENESIS_AGENTS = [
@@ -44,34 +46,43 @@ function shortAddr(addr: string) {
 }
 
 export default function StakePage() {
-  const [wallet, setWallet]       = useState<string | null>(null);
+  const [activeTab, setActiveTab]   = useState<"staking" | "myvp">("staking");
+  const [wallet, setWallet]         = useState<string | null>(null);
   const [walletType, setWalletType] = useState<"metamask" | "okx" | null>(null);
-  const [xsenBal, setXsenBal]     = useState<number>(0);
-  const [effectiveVP, setVP]      = useState<number>(0);
-  const [positions, setPositions] = useState<any[]>([]);
-  const [leaderboard, setLb]      = useState<any[]>([]);
-  const [tiers, setTiers]         = useState<any>(null);
-  const [totals, setTotals]       = useState<any>(null);
+  const [xsenBal, setXsenBal]       = useState<number>(0);
+  const [effectiveVP, setVP]        = useState<number>(0);
+  const [positions, setPositions]   = useState<any[]>([]);
+  const [leaderboard, setLb]        = useState<any[]>([]);
+  const [tiers, setTiers]           = useState<any>(null);
+  const [totals, setTotals]         = useState<any>(null);
+  const [epoch, setEpoch]           = useState<any>(null);
   const [delegating, setDelegating] = useState<string | null>(null);
-  const [txStatus, setTxStatus]   = useState<string | null>(null);
+  const [txStatus, setTxStatus]     = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
+
+  // Stake form state
+  const [stakeAmount, setStakeAmount]   = useState("");
+  const [selectedTier, setSelectedTier] = useState(0);
+  const [staking, setStaking]           = useState(false);
+  const [unstaking, setUnstaking]       = useState<number | null>(null);
 
   function getProvider() {
     if (walletType === "okx") return (window as any).okxwallet;
     return (window as any).ethereum;
   }
 
-  // Load static data
   useEffect(() => {
     Promise.all([
       fetch("/api/staking/tiers").then(r => r.ok ? r.json() : null),
       fetch("/api/staking/totals").then(r => r.ok ? r.json() : null),
       fetch("/api/staking/leaderboard?limit=5").then(r => r.ok ? r.json() : null),
-    ]).then(([t, tot, lb]) => {
+      fetch("/api/staking/epoch").then(r => r.ok ? r.json() : null),
+    ]).then(([t, tot, lb, ep]) => {
       setTiers(t);
       setTotals(tot);
       setLb(lb?.leaderboard ?? []);
+      setEpoch(ep);
     });
   }, []);
 
@@ -109,7 +120,7 @@ export default function StakePage() {
     setShowWalletModal(false);
     const raw = type === "okx" ? (window as any).okxwallet : (window as any).ethereum;
     if (!raw) {
-      alert(type === "okx" ? "OKX Wallet not detected. Please install OKX Wallet." : "MetaMask not detected. Please install MetaMask.");
+      alert(type === "okx" ? "OKX Wallet not detected." : "MetaMask not detected.");
       return;
     }
     setConnecting(true);
@@ -134,22 +145,68 @@ export default function StakePage() {
     setConnecting(false);
   }
 
+  async function stakeTokens() {
+    if (!wallet || !stakeAmount || Number(stakeAmount) <= 0) return;
+    setStaking(true);
+    setTxStatus(null);
+    try {
+      const provider = new ethers.BrowserProvider(getProvider());
+      const signer = await provider.getSigner();
+      const token   = new ethers.Contract(TOKEN_ADDRESS,   TOKEN_ABI,   signer);
+      const stk     = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
+      const amt = ethers.parseEther(stakeAmount);
+
+      setTxStatus("Approving XSEN...");
+      const approveTx = await token.approve(STAKING_ADDRESS, amt);
+      await approveTx.wait();
+
+      setTxStatus("Staking...");
+      const tx = await stk.stake(amt, selectedTier);
+      await tx.wait();
+
+      setTxStatus(`Staked ${stakeAmount} XSEN in ${TIER_INFO[selectedTier].name}`);
+      setStakeAmount("");
+      await loadWalletData(wallet, walletType ?? undefined);
+    } catch (e: any) {
+      setTxStatus(`Error: ${e.message?.slice(0, 80)}`);
+    }
+    setStaking(false);
+  }
+
+  async function unstakePosition(posId: number) {
+    if (!wallet) return;
+    setUnstaking(posId);
+    setTxStatus(null);
+    try {
+      const provider = new ethers.BrowserProvider(getProvider());
+      const signer = await provider.getSigner();
+      const stk = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
+      const tx = await stk.unstake(posId);
+      setTxStatus("Unstaking...");
+      await tx.wait();
+      setTxStatus("Unstaked successfully");
+      await loadWalletData(wallet, walletType ?? undefined);
+    } catch (e: any) {
+      setTxStatus(`Error: ${e.message?.slice(0, 80)}`);
+    }
+    setUnstaking(null);
+  }
+
   async function delegateTo(agentName: string) {
     if (!wallet || positions.length === 0) return;
     const activePos = positions.find(p => p.active);
     if (!activePos) { setTxStatus("No active positions to delegate."); return; }
-
     setDelegating(agentName);
     setTxStatus(null);
     try {
       const provider = new ethers.BrowserProvider(getProvider());
       const signer = await provider.getSigner();
-      const staking = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
-      const tx = await staking.delegatePosition(activePos.id, agentName);
+      const stk = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
+      const tx = await stk.delegatePosition(activePos.id, agentName);
       setTxStatus(`Delegating... TX: ${tx.hash.slice(0, 10)}...`);
       await tx.wait();
       setTxStatus(`Delegated to ${agentName}`);
-      await loadWalletData(wallet);
+      await loadWalletData(wallet, walletType ?? undefined);
     } catch (e: any) {
       setTxStatus(`Error: ${e.message?.slice(0, 80)}`);
     }
@@ -157,263 +214,452 @@ export default function StakePage() {
   }
 
   const currentDelegate = positions.find(p => p.active && p.delegatedAgent)?.delegatedAgent;
-  const totalStaked = totals?.total_staked_xsen ?? 0;
-  const totalVP = totals?.total_effective_vp_xsen ?? 0;
-  const myVPPct = totalVP > 0 && effectiveVP > 0 ? ((effectiveVP / totalVP) * 100).toFixed(2) : "0.00";
+  const totalStaked  = totals?.total_staked_xsen ?? 0;
+  const totalVP      = totals?.total_effective_vp_xsen ?? 0;
+  const myVPPct      = totalVP > 0 && effectiveVP > 0 ? ((effectiveVP / totalVP) * 100).toFixed(2) : "0.00";
   const totalAccReward = positions.reduce((s, p) => s + p.accReward, 0);
+  const myTotalStaked  = positions.filter(p => p.active).reduce((s, p) => s + p.amount, 0);
 
   return (
     <div className="-mx-6 -mt-6">
 
-      {/* ── Hero Dashboard ─────────────────────────────────────────── */}
-      <div className="relative overflow-hidden px-6 pt-16 pb-10 text-center border-b border-gray-800/40"
+      {/* ── Hero ────────────────────────────────────────────────────── */}
+      <div className="relative overflow-hidden px-6 pt-14 pb-8 border-b border-gray-800/40"
         style={{ background: "radial-gradient(ellipse 80% 60% at 50% -10%, rgba(139,92,246,0.12) 0%, transparent 70%)" }}
       >
-        <h1 className="text-5xl font-black text-white mb-3 tracking-tight">
-          X-Senate <span className="text-purple-400">Stake</span>
-        </h1>
-        <p className="text-gray-500 max-w-lg mx-auto mb-8">
-          Stake and lock XSEN to receive Voting Power. Delegate to AI agents and participate in X-Senate governance.
-        </p>
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-6 flex-wrap">
+          <div>
+            <h1 className="text-4xl font-black text-white tracking-tight">
+              X-Senate <span className="text-purple-400">Stake</span>
+            </h1>
+            <p className="text-gray-500 mt-1.5 text-sm max-w-md">
+              Lock XSEN to earn Voting Power. Delegate to AI agents and govern X Layer.
+            </p>
+          </div>
 
-        {/* Action bar */}
-        <div className="flex items-center justify-center gap-3">
-          {wallet ? (
-            <>
+          <div className="flex items-center gap-3">
+            {wallet ? (
+              <>
+                {totalAccReward > 0 && (
+                  <button
+                    onClick={async () => {
+                      if (!wallet) return;
+                      try {
+                        const provider = new ethers.BrowserProvider(getProvider());
+                        const signer = await provider.getSigner();
+                        const stk = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
+                        const tx = await stk.claimAllRewards();
+                        setTxStatus("Claiming...");
+                        await tx.wait();
+                        setTxStatus("Claimed!");
+                        await loadWalletData(wallet, walletType ?? undefined);
+                      } catch (e: any) { setTxStatus(`Error: ${e.message?.slice(0,60)}`); }
+                    }}
+                    className="flex items-center gap-2 bg-green-600/20 hover:bg-green-600/30 border border-green-500/40 text-green-300 font-semibold px-4 py-2 rounded-full text-sm transition-all"
+                  >
+                    Claim {fmt(totalAccReward)} XSEN
+                  </button>
+                )}
+                <div className="flex items-center gap-2 bg-gray-900 border border-gray-700 rounded-full px-4 py-2 text-sm">
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                  <span className="font-mono text-gray-300">{shortAddr(wallet)}</span>
+                  <span className="text-gray-600">·</span>
+                  <span className="text-white font-semibold">{fmt(xsenBal)} XSEN</span>
+                </div>
+              </>
+            ) : (
               <button
-                onClick={async () => {
-                  if (!wallet) return;
-                  try {
-                    const provider = new ethers.BrowserProvider(getProvider());
-                    const signer = await provider.getSigner();
-                    const staking = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
-                    const tx = await staking.claimAllRewards();
-                    setTxStatus("Claiming rewards...");
-                    await tx.wait();
-                    setTxStatus("Rewards claimed!");
-                    await loadWalletData(wallet, walletType ?? undefined);
-                  } catch (e: any) { setTxStatus(`Error: ${e.message?.slice(0,60)}`); }
-                }}
-                className="flex items-center gap-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 font-semibold px-5 py-2.5 rounded-full text-sm transition-all"
+                onClick={() => setShowWalletModal(true)}
+                disabled={connecting}
+                className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold px-6 py-2.5 rounded-full transition-all hover:scale-105 text-sm"
+                style={{ boxShadow: "0 0 24px rgba(139,92,246,0.35)" }}
               >
-                Claim Rewards · {fmt(totalAccReward)} XSEN
+                {connecting ? "Connecting..." : "Connect Wallet"}
               </button>
-              <div className="flex items-center gap-2 bg-gray-900 border border-gray-700 rounded-full px-4 py-2.5 text-sm">
-                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                <span className="font-mono text-gray-300">{shortAddr(wallet)}</span>
-                <span className="text-gray-600">·</span>
-                <span className="text-white font-semibold">{fmt(xsenBal)} XSEN</span>
-              </div>
-            </>
-          ) : (
-            <button
-              onClick={() => setShowWalletModal(true)}
-              disabled={connecting}
-              className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold px-8 py-3 rounded-full transition-all hover:scale-105 text-sm"
-              style={{ boxShadow: "0 0 30px rgba(139,92,246,0.35)" }}
-            >
-              {connecting ? "Connecting..." : "Connect Wallet"}
-            </button>
-          )}
+            )}
+          </div>
         </div>
 
         {txStatus && (
-          <div className={`mt-4 inline-block rounded-full px-4 py-1.5 text-xs border ${txStatus.startsWith("Error") ? "bg-red-900/20 border-red-700/40 text-red-300" : "bg-green-900/20 border-green-700/40 text-green-300"}`}>
+          <div className={`mt-4 max-w-5xl mx-auto inline-block rounded-full px-4 py-1.5 text-xs border ${txStatus.startsWith("Error") ? "bg-red-900/20 border-red-700/40 text-red-300" : "bg-green-900/20 border-green-700/40 text-green-300"}`}>
             {txStatus}
           </div>
         )}
       </div>
 
-      {/* ── Big Stats ──────────────────────────────────────────────── */}
-      <div className="grid md:grid-cols-2 gap-px bg-gray-800/40">
-        {/* Global */}
-        <div className="bg-[#0a0a0f] px-8 py-8">
-          <div className="text-xs font-mono text-gray-600 tracking-widest uppercase mb-5">Protocol</div>
-          <div className="grid grid-cols-2 gap-6">
-            <div>
-              <div className="text-3xl font-black text-white">{fmt(totalStaked)}</div>
-              <div className="text-sm text-gray-500 mt-1">Total XSEN Staked</div>
-            </div>
-            <div>
-              <div className="text-3xl font-black text-purple-300">{fmt(totalVP)}</div>
-              <div className="text-sm text-gray-500 mt-1">Total Voting Power</div>
-            </div>
-            <div>
-              <div className="text-3xl font-black text-blue-300">{leaderboard.length}</div>
-              <div className="text-sm text-gray-500 mt-1">Active Agents</div>
-            </div>
-            <div>
-              <div className="text-3xl font-black text-green-300">35%</div>
-              <div className="text-sm text-gray-500 mt-1">Max APY</div>
-            </div>
+      {/* ── Protocol Stats Bar ──────────────────────────────────────── */}
+      <div className="grid grid-cols-4 divide-x divide-gray-800/60 border-b border-gray-800/40 bg-[#0a0a0f]">
+        {[
+          { label: "Total Staked",   value: fmt(totalStaked) + " XSEN", color: "text-white" },
+          { label: "Total VP",       value: fmt(totalVP),                color: "text-purple-300" },
+          { label: "Max APY",        value: "35%",                       color: "text-green-300" },
+          { label: "Active Agents",  value: String(leaderboard.length),  color: "text-blue-300" },
+        ].map(s => (
+          <div key={s.label} className="px-6 py-4 text-center">
+            <div className={`text-2xl font-black ${s.color}`}>{s.value}</div>
+            <div className="text-xs text-gray-600 mt-0.5">{s.label}</div>
           </div>
-        </div>
+        ))}
+      </div>
 
-        {/* Personal */}
-        <div className="bg-[#0a0a0f] px-8 py-8">
-          <div className="text-xs font-mono text-gray-600 tracking-widest uppercase mb-5">My Position</div>
-          {wallet ? (
-            <div className="grid grid-cols-2 gap-6">
-              <div>
-                <div className="text-3xl font-black text-white">{myVPPct}%</div>
-                <div className="text-sm text-gray-500 mt-1">My Voting Power</div>
-              </div>
-              <div>
-                <div className="text-3xl font-black text-purple-300">{fmt(effectiveVP)}</div>
-                <div className="text-sm text-gray-500 mt-1">Effective VP</div>
-              </div>
-              <div>
-                <div className="text-3xl font-black text-white">{fmt(positions.filter(p=>p.active).reduce((s,p)=>s+p.amount,0))}</div>
-                <div className="text-sm text-gray-500 mt-1">XSEN Staked</div>
-              </div>
-              <div>
-                <div className="text-3xl font-black text-yellow-300">{currentDelegate || "—"}</div>
-                <div className="text-sm text-gray-500 mt-1">Delegated To</div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-32 text-gray-600 text-sm">
-              Connect wallet to view your position
-            </div>
-          )}
+      {/* ── Tabs ────────────────────────────────────────────────────── */}
+      <div className="border-b border-gray-800/40 bg-[#0a0a0f]">
+        <div className="max-w-5xl mx-auto px-6 flex gap-0">
+          {(["staking", "myvp"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-5 py-3.5 text-sm font-semibold border-b-2 transition-all ${
+                activeTab === tab
+                  ? "border-purple-500 text-white"
+                  : "border-transparent text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              {tab === "staking" ? "Staking" : "My VP"}
+              {tab === "myvp" && wallet && positions.filter(p => p.active).length > 0 && (
+                <span className="ml-2 text-[10px] bg-purple-600/30 text-purple-300 rounded-full px-1.5 py-0.5">
+                  {positions.filter(p => p.active).length}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* ── Content ────────────────────────────────────────────────── */}
-      <div className="max-w-5xl mx-auto px-6 py-10 space-y-10">
+      {/* ── Tab Content ─────────────────────────────────────────────── */}
+      <div className="max-w-5xl mx-auto px-6 py-8">
 
-        {/* Tiers + Delegate */}
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Staking Tiers */}
-          <div>
-            <h2 className="text-base font-semibold text-white mb-4 tracking-tight">Staking Tiers</h2>
-            <div className="space-y-2">
-              {TIER_INFO.map((t) => (
-                <div key={t.id} className={`border rounded-xl p-4 ${t.color}`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${t.badge}`}>{t.name}</span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-white font-bold text-sm">{t.apy}% APY</span>
-                      {t.days > 0 && <span className="text-gray-500 text-xs">{t.days}d lock</span>}
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-gray-500">VP Multiplier</span>
-                    <span className="font-bold text-purple-300">{t.mult}x</span>
-                  </div>
-                  <div className="h-1 bg-gray-800 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full bg-gradient-to-r from-purple-600 to-blue-400" style={{ width: `${((t.mult - 1) / 0.5) * 100}%` }} />
+        {/* ── STAKING TAB ── */}
+        {activeTab === "staking" && (
+          <div className="space-y-8">
+
+            {/* Stake Form */}
+            <div className="border border-gray-800/60 rounded-2xl overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-800/40 flex items-center justify-between">
+                <h2 className="font-semibold text-white">Stake XSEN</h2>
+                {wallet && <span className="text-xs text-gray-500">Balance: <span className="text-white font-mono">{fmt(xsenBal)} XSEN</span></span>}
+              </div>
+              <div className="p-6 space-y-5">
+                {/* Amount */}
+                <div>
+                  <label className="text-xs text-gray-500 mb-2 block">Amount</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      value={stakeAmount}
+                      onChange={e => setStakeAmount(e.target.value)}
+                      placeholder="0.00"
+                      className="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm font-mono focus:outline-none focus:border-purple-500 placeholder-gray-700"
+                    />
+                    {wallet && (
+                      <button
+                        onClick={() => setStakeAmount(String(Math.floor(xsenBal)))}
+                        className="px-3 py-2.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-xs text-gray-400 transition-colors"
+                      >
+                        MAX
+                      </button>
+                    )}
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Delegate */}
-          <div>
-            <h2 className="text-base font-semibold text-white mb-4 tracking-tight">
-              Delegate Voting Power
-              {wallet && <span className="ml-2 text-sm font-normal text-purple-400">{fmt(effectiveVP)} VP</span>}
-            </h2>
+                {/* Tier selector */}
+                <div>
+                  <label className="text-xs text-gray-500 mb-2 block">Lock Period</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {TIER_INFO.map(t => (
+                      <button
+                        key={t.id}
+                        onClick={() => setSelectedTier(t.id)}
+                        className={`border rounded-xl p-3 text-left transition-all ${
+                          selectedTier === t.id
+                            ? `${t.color} ring-1 ring-purple-500/50`
+                            : "border-gray-800 bg-gray-900/30 hover:border-gray-700"
+                        }`}
+                      >
+                        <div className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full w-fit mb-1.5 ${t.badge}`}>{t.name}</div>
+                        <div className="text-white font-bold text-sm">{t.apy}% APY</div>
+                        <div className="text-xs text-purple-400 mt-0.5">{t.mult}x VP</div>
+                        {t.days > 0 && <div className="text-xs text-gray-600 mt-0.5">{t.days}d lock</div>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* VP preview */}
+                {stakeAmount && Number(stakeAmount) > 0 && (
+                  <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl px-4 py-3 flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Estimated VP</span>
+                    <span className="font-bold text-purple-300">
+                      {fmt(Number(stakeAmount) * TIER_INFO[selectedTier].mult)} VP
+                    </span>
+                  </div>
+                )}
+
+                <button
+                  onClick={wallet ? stakeTokens : () => setShowWalletModal(true)}
+                  disabled={staking || (!!wallet && (!stakeAmount || Number(stakeAmount) <= 0))}
+                  className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-all text-sm"
+                  style={!staking ? { boxShadow: "0 0 20px rgba(139,92,246,0.25)" } : undefined}
+                >
+                  {staking ? "Processing..." : wallet ? `Stake ${TIER_INFO[selectedTier].name}` : "Connect Wallet to Stake"}
+                </button>
+              </div>
+            </div>
+
+            {/* Tier Info Cards */}
+            <div>
+              <h2 className="text-sm font-semibold text-gray-400 mb-3 tracking-wider uppercase">Tier Details</h2>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {TIER_INFO.map(t => (
+                  <div key={t.id} className={`border rounded-xl p-4 ${t.color}`}>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${t.badge}`}>{t.name}</span>
+                    <div className="mt-3 space-y-1.5">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">APY</span>
+                        <span className="text-white font-bold">{t.apy}%</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">VP Mult</span>
+                        <span className="text-purple-300 font-bold">{t.mult}x</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Lock</span>
+                        <span className="text-gray-300">{t.days > 0 ? `${t.days} days` : "None"}</span>
+                      </div>
+                    </div>
+                    <div className="mt-3 h-1 bg-gray-800 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-gradient-to-r from-purple-600 to-blue-400"
+                        style={{ width: `${((t.mult - 1) / 2) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Epoch Info */}
+            {epoch && (
+              <div className="border border-gray-800/60 rounded-xl px-6 py-4">
+                <div className="text-xs font-mono text-gray-600 tracking-widest uppercase mb-3">Epoch</div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <div className="text-xl font-black text-white">{epoch.current_epoch ?? "—"}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">Current Epoch</div>
+                  </div>
+                  <div>
+                    <div className="text-xl font-black text-green-300">{epoch.reward_pool ? fmt(epoch.reward_pool) : "—"}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">Reward Pool</div>
+                  </div>
+                  <div>
+                    <div className="text-xl font-black text-blue-300">{epoch.next_epoch_in ?? "—"}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">Next Epoch In</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+          </div>
+        )}
+
+        {/* ── MY VP TAB ── */}
+        {activeTab === "myvp" && (
+          <div className="space-y-8">
+
             {!wallet ? (
-              <div className="border border-gray-800/60 rounded-xl p-8 text-center">
-                <div className="text-gray-600 text-sm mb-3">Connect wallet to delegate</div>
-                <button onClick={() => setShowWalletModal(true)} className="bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+              <div className="border border-dashed border-gray-700 rounded-2xl p-16 text-center">
+                <div className="text-gray-600 text-sm mb-4">Connect your wallet to view your staking positions</div>
+                <button
+                  onClick={() => setShowWalletModal(true)}
+                  className="bg-purple-600 hover:bg-purple-500 text-white font-semibold px-6 py-2.5 rounded-full text-sm transition-colors"
+                >
                   Connect Wallet
                 </button>
               </div>
             ) : (
-              <div className="space-y-2">
-                {GENESIS_AGENTS.map((agent) => {
-                  const lb = leaderboard.find(l => l.agent_name === agent.name);
-                  const isActive = currentDelegate === agent.name;
-                  return (
-                    <div key={agent.name} className={`border rounded-xl p-3.5 flex items-center justify-between transition-all ${isActive ? "border-purple-500/50 bg-purple-950/20" : "border-gray-800/60 bg-gray-900/20 hover:border-gray-700"}`}>
-                      <div className="flex items-center gap-3">
-                        <div className="w-1 h-8 rounded-full" style={{ backgroundColor: agent.accent }} />
-                        <div>
-                          <div className="font-semibold text-white text-sm">{agent.name}</div>
-                          <div className="text-xs text-gray-600">{agent.role}</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        {lb && <div className="text-right text-xs text-gray-600">{fmt(lb.total_delegated_vp_xsen)} VP</div>}
-                        {isActive ? (
-                          <span className="text-xs bg-purple-600/20 border border-purple-500/30 text-purple-300 px-3 py-1.5 rounded-lg">Delegated</span>
-                        ) : (
-                          <button onClick={() => delegateTo(agent.name)} disabled={!!delegating || positions.filter(p=>p.active).length===0} className="text-xs bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg transition-colors">
-                            {delegating === agent.name ? "..." : "Delegate"}
-                          </button>
-                        )}
-                      </div>
+              <>
+                {/* My VP Summary */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {[
+                    { label: "Effective VP",   value: fmt(effectiveVP),   color: "text-purple-300" },
+                    { label: "XSEN Staked",    value: fmt(myTotalStaked), color: "text-white" },
+                    { label: "VP Share",       value: myVPPct + "%",      color: "text-blue-300" },
+                    { label: "Pending Reward", value: fmt(totalAccReward) + " XSEN", color: "text-green-300" },
+                  ].map(s => (
+                    <div key={s.label} className="border border-gray-800/60 rounded-xl p-4 text-center">
+                      <div className={`text-2xl font-black ${s.color}`}>{s.value}</div>
+                      <div className="text-xs text-gray-500 mt-1">{s.label}</div>
                     </div>
-                  );
-                })}
-                {positions.filter(p=>p.active).length===0 && <p className="text-xs text-gray-700 mt-2">Stake XSEN first to enable delegation.</p>}
-              </div>
-            )}
-          </div>
-        </div>
+                  ))}
+                </div>
 
-        {/* My Positions */}
-        {wallet && positions.length > 0 && (
-          <div>
-            <h2 className="text-base font-semibold text-white mb-4">My Positions</h2>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {positions.map(p => (
-                <div key={p.id} className={`border rounded-xl p-4 ${p.active ? "border-gray-700 bg-gray-900/40" : "border-gray-800 opacity-50"}`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-gray-600">Position #{p.id}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${TIER_INFO[p.tierId]?.badge ?? "bg-gray-700 text-gray-300"}`}>{p.tier}</span>
+                {/* Claim All */}
+                {totalAccReward > 0 && (
+                  <button
+                    onClick={async () => {
+                      if (!wallet) return;
+                      try {
+                        const provider = new ethers.BrowserProvider(getProvider());
+                        const signer = await provider.getSigner();
+                        const stk = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
+                        const tx = await stk.claimAllRewards();
+                        setTxStatus("Claiming...");
+                        await tx.wait();
+                        setTxStatus("Claimed!");
+                        await loadWalletData(wallet, walletType ?? undefined);
+                      } catch (e: any) { setTxStatus(`Error: ${e.message?.slice(0,60)}`); }
+                    }}
+                    className="flex items-center gap-2 bg-green-600/20 hover:bg-green-600/30 border border-green-500/40 text-green-300 font-semibold px-5 py-2.5 rounded-full text-sm transition-all"
+                  >
+                    Claim All Rewards · {fmt(totalAccReward)} XSEN
+                  </button>
+                )}
+
+                {/* My Positions */}
+                {positions.length > 0 ? (
+                  <div>
+                    <h2 className="text-sm font-semibold text-gray-400 mb-3 tracking-wider uppercase">My Positions</h2>
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {positions.map(p => {
+                        const now = Math.floor(Date.now() / 1000);
+                        const locked = p.lockEnd > 0 && p.lockEnd > now;
+                        const unlockDate = p.lockEnd > 0 ? new Date(p.lockEnd * 1000).toLocaleDateString() : null;
+                        return (
+                          <div key={p.id} className={`border rounded-xl p-4 ${p.active ? "border-gray-700 bg-gray-900/40" : "border-gray-800 opacity-40"}`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs text-gray-600">Position #{p.id}</span>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${TIER_INFO[p.tierId]?.badge ?? "bg-gray-700 text-gray-300"}`}>{p.tier}</span>
+                            </div>
+                            <div className="text-2xl font-black text-white">{fmt(p.amount)} <span className="text-sm font-normal text-gray-500">XSEN</span></div>
+                            <div className="mt-2 space-y-1 text-xs">
+                              <div className="flex justify-between text-gray-500">
+                                <span>Reward</span>
+                                <span className="text-green-400">+{fmt(p.accReward)} XSEN</span>
+                              </div>
+                              {p.delegatedAgent && (
+                                <div className="flex justify-between text-gray-500">
+                                  <span>Delegated</span>
+                                  <span className="text-purple-400">{p.delegatedAgent}</span>
+                                </div>
+                              )}
+                              {unlockDate && (
+                                <div className="flex justify-between text-gray-500">
+                                  <span>{locked ? "Locked until" : "Unlocked"}</span>
+                                  <span className={locked ? "text-yellow-400" : "text-green-400"}>{locked ? unlockDate : "Now"}</span>
+                                </div>
+                              )}
+                            </div>
+                            {p.active && !locked && (
+                              <button
+                                onClick={() => unstakePosition(p.id)}
+                                disabled={unstaking === p.id}
+                                className="mt-3 w-full text-xs bg-gray-800 hover:bg-gray-700 disabled:opacity-40 border border-gray-700 text-gray-300 py-1.5 rounded-lg transition-colors"
+                              >
+                                {unstaking === p.id ? "Unstaking..." : "Unstake"}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="text-2xl font-black text-white">{fmt(p.amount)} <span className="text-sm font-normal text-gray-500">XSEN</span></div>
-                  <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
-                    <span>Reward: <span className="text-green-400">+{fmt(p.accReward)}</span></span>
-                    <span className="text-purple-400">{p.delegatedAgent || "—"}</span>
+                ) : (
+                  <div className="border border-dashed border-gray-800 rounded-xl p-10 text-center text-gray-600 text-sm">
+                    No positions yet.{" "}
+                    <button onClick={() => setActiveTab("staking")} className="text-purple-400 hover:text-purple-300 underline">
+                      Stake XSEN
+                    </button>{" "}
+                    to get started.
+                  </div>
+                )}
+
+                {/* Delegation */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-sm font-semibold text-gray-400 tracking-wider uppercase">Delegate Voting Power</h2>
+                    {effectiveVP > 0 && <span className="text-sm text-purple-400 font-semibold">{fmt(effectiveVP)} VP</span>}
+                  </div>
+
+                  {positions.filter(p => p.active).length === 0 ? (
+                    <p className="text-xs text-gray-700">Stake first to enable delegation.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {GENESIS_AGENTS.map((agent) => {
+                        const lb = leaderboard.find(l => l.agent_name === agent.name);
+                        const isActive = currentDelegate === agent.name;
+                        return (
+                          <div key={agent.name} className={`border rounded-xl p-3.5 flex items-center justify-between transition-all ${isActive ? "border-purple-500/50 bg-purple-950/20" : "border-gray-800/60 bg-gray-900/20 hover:border-gray-700"}`}>
+                            <div className="flex items-center gap-3">
+                              <div className="w-1 h-8 rounded-full" style={{ backgroundColor: agent.accent }} />
+                              <div>
+                                <div className="font-semibold text-white text-sm">{agent.name}</div>
+                                <div className="text-xs text-gray-600">{agent.role}</div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              {lb && <div className="text-xs text-gray-600 font-mono">{fmt(lb.total_delegated_vp_xsen)} VP</div>}
+                              {isActive ? (
+                                <span className="text-xs bg-purple-600/20 border border-purple-500/30 text-purple-300 px-3 py-1.5 rounded-lg">Delegated</span>
+                              ) : (
+                                <button
+                                  onClick={() => delegateTo(agent.name)}
+                                  disabled={!!delegating}
+                                  className="text-xs bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg transition-colors"
+                                >
+                                  {delegating === agent.name ? "..." : isActive ? "Change" : "Delegate"}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Leaderboard */}
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-400 mb-3 tracking-wider uppercase">Agent Leaderboard</h2>
+                  <div className="border border-gray-800/60 rounded-xl overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-800 text-xs text-gray-600 text-left bg-gray-900/30">
+                          <th className="px-4 py-3 w-16">Rank</th>
+                          <th className="px-4 py-3">Agent</th>
+                          <th className="px-4 py-3 text-right">Delegated VP</th>
+                          <th className="px-4 py-3 text-right">Delegators</th>
+                          <th className="px-4 py-3 text-right">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {leaderboard.map((a: any) => (
+                          <tr key={a.agent_name} className="border-b border-gray-800/30 hover:bg-gray-800/20 transition-colors">
+                            <td className="px-4 py-3 text-xs font-bold text-gray-500">{a.rank_label}</td>
+                            <td className="px-4 py-3">
+                              <span className="font-semibold text-white">{a.agent_name}</span>
+                              {a.is_genesis && <span className="ml-2 text-[10px] text-purple-400 bg-purple-900/20 rounded-full px-1.5 py-0.5">Genesis</span>}
+                            </td>
+                            <td className="px-4 py-3 text-right font-mono text-purple-300">{fmt(a.total_delegated_vp_xsen)}</td>
+                            <td className="px-4 py-3 text-right text-gray-400">{a.delegator_count}</td>
+                            <td className="px-4 py-3 text-right">
+                              {a.voted_this_epoch
+                                ? <span className="text-xs text-green-400 bg-green-900/20 rounded-full px-2 py-0.5">Active</span>
+                                : <span className="text-xs text-gray-700">—</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-              ))}
-            </div>
+
+              </>
+            )}
           </div>
         )}
 
-        {/* Leaderboard */}
-        <div>
-          <h2 className="text-base font-semibold text-white mb-4">Agent Leaderboard</h2>
-          <div className="border border-gray-800/60 rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-800 text-xs text-gray-600 text-left bg-gray-900/30">
-                  <th className="px-4 py-3 w-16">Rank</th>
-                  <th className="px-4 py-3">Agent</th>
-                  <th className="px-4 py-3 text-right">Delegated VP</th>
-                  <th className="px-4 py-3 text-right">Delegators</th>
-                  <th className="px-4 py-3 text-right">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {leaderboard.map((a: any) => (
-                  <tr key={a.agent_name} className="border-b border-gray-800/30 hover:bg-gray-800/20 transition-colors">
-                    <td className="px-4 py-3 text-xs font-bold text-gray-500">{a.rank_label}</td>
-                    <td className="px-4 py-3">
-                      <span className="font-semibold text-white">{a.agent_name}</span>
-                      {a.is_genesis && <span className="ml-2 text-xs text-purple-400 bg-purple-900/20 rounded-full px-1.5 py-0.5">Genesis</span>}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono text-purple-300">{fmt(a.total_delegated_vp_xsen)}</td>
-                    <td className="px-4 py-3 text-right text-gray-400">{a.delegator_count}</td>
-                    <td className="px-4 py-3 text-right">
-                      {a.voted_this_epoch ? <span className="text-xs text-green-400 bg-green-900/20 rounded-full px-2 py-0.5">Active</span> : <span className="text-xs text-gray-700">—</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
       </div>
 
-      {/* Wallet selection modal */}
+      {/* Wallet modal */}
       {showWalletModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowWalletModal(false)}>
           <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-80 shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -424,11 +670,9 @@ export default function StakePage() {
             <div className="space-y-3">
               <button
                 onClick={() => connectWallet("metamask")}
-                className="w-full flex items-center gap-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-orange-500/50 rounded-xl px-4 py-3.5 transition-all group"
+                className="w-full flex items-center gap-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-orange-500/50 rounded-xl px-4 py-3.5 transition-all"
               >
-                <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-xl">
-                  🦊
-                </div>
+                <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-xl">🦊</div>
                 <div className="text-left">
                   <div className="font-semibold text-white text-sm">MetaMask</div>
                   <div className="text-xs text-gray-500">Most popular browser wallet</div>
@@ -436,20 +680,16 @@ export default function StakePage() {
               </button>
               <button
                 onClick={() => connectWallet("okx")}
-                className="w-full flex items-center gap-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-blue-500/50 rounded-xl px-4 py-3.5 transition-all group"
+                className="w-full flex items-center gap-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-blue-500/50 rounded-xl px-4 py-3.5 transition-all"
               >
-                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center font-black text-white text-sm">
-                  OKX
-                </div>
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center font-black text-white text-sm">OKX</div>
                 <div className="text-left">
                   <div className="font-semibold text-white text-sm">OKX Wallet</div>
                   <div className="text-xs text-gray-500">Native X Layer wallet</div>
                 </div>
               </button>
             </div>
-            <button onClick={() => setShowWalletModal(false)} className="w-full mt-4 text-xs text-gray-600 hover:text-gray-400 transition-colors py-2">
-              Cancel
-            </button>
+            <button onClick={() => setShowWalletModal(false)} className="w-full mt-4 text-xs text-gray-600 hover:text-gray-400 transition-colors py-2">Cancel</button>
           </div>
         </div>
       )}
