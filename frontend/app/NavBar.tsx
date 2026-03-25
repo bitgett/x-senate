@@ -83,6 +83,7 @@ const NAV_ITEMS = [
   { href: "/agents",   label: "Agents",    num: "03" },
   { href: "/stake",    label: "Stake",     num: "04" },
   { href: "/projects", label: "Projects",  num: null },
+  { href: "/activity", label: "Activity",  num: null },
   { href: "/onchain",  label: "X Layer",   num: null, icon: true },
 ];
 
