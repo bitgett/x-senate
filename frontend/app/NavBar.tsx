@@ -11,13 +11,14 @@ function fmt(val: number): string {
 }
 
 const NAV_ITEMS = [
-  { href: "/sentinel", label: "Sentinel",  num: "01" },
-  { href: "/app",      label: "Proposals", num: "02" },
-  { href: "/agents",   label: "Agents",    num: "03" },
-  { href: "/stake",    label: "Stake",     num: "04" },
-  { href: "/projects", label: "Projects",  num: null },
-  { href: "/activity", label: "Activity",  num: null },
-  { href: "/onchain",  label: "X Layer",   num: null, icon: true },
+  { href: "/leaderboard", label: "Leaderboard", num: null, shimmer: true },
+  { href: "/sentinel",    label: "Sentinel",    num: "01" },
+  { href: "/app",         label: "Proposals",   num: "02" },
+  { href: "/agents",      label: "Agents",      num: "03" },
+  { href: "/stake",       label: "Stake",       num: "04" },
+  { href: "/projects",    label: "Projects",    num: null },
+  { href: "/activity",    label: "Activity",    num: null },
+  { href: "/onchain",     label: "X Layer",     num: null, icon: true },
 ];
 
 export default function NavBar() {
@@ -51,6 +52,33 @@ export default function NavBar() {
         <div className="flex items-center gap-0.5">
           {NAV_ITEMS.map((item) => {
             const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+            if ((item as any).shimmer) {
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`relative group px-3 py-1.5 rounded-lg text-sm font-semibold transition-all duration-150 flex items-center gap-1.5 overflow-hidden mr-1 ${
+                    isActive
+                      ? "text-white border border-yellow-500/60 bg-yellow-950/40"
+                      : "text-yellow-400 border border-yellow-500/30 bg-yellow-950/20 hover:border-yellow-400/60 hover:bg-yellow-950/40"
+                  }`}
+                  style={{ boxShadow: isActive ? "0 0 12px rgba(255,215,0,0.25)" : undefined }}
+                >
+                  {/* shimmer sweep */}
+                  <span
+                    className="pointer-events-none absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out"
+                    style={{
+                      background: "linear-gradient(90deg, transparent, rgba(255,215,0,0.15), transparent)",
+                    }}
+                  />
+                  <span>🏆</span>
+                  <span>{item.label}</span>
+                  {isActive && (
+                    <span className="absolute -bottom-px left-1/2 -translate-x-1/2 w-4 h-px bg-yellow-400 rounded-full" />
+                  )}
+                </Link>
+              );
+            }
             return (
               <Link
                 key={item.href}
