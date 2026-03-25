@@ -96,7 +96,7 @@ function Reveal({ children, delay = 0, className = "" }: { children: React.React
 }
 
 // ─── 3D tilt card ─────────────────────────────────────────────────────────────
-function TiltCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+function TiltCard({ children, className = "", style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
   const ref = useRef<HTMLDivElement>(null);
   const onMove = useCallback((e: React.MouseEvent) => {
     const el = ref.current;
@@ -115,7 +115,7 @@ function TiltCard({ children, className = "" }: { children: React.ReactNode; cla
       ref={ref}
       onMouseMove={onMove}
       onMouseLeave={onLeave}
-      style={{ transition: "transform 0.3s ease", willChange: "transform" }}
+      style={{ transition: "transform 0.3s ease", willChange: "transform", ...style }}
       className={className}
     >
       {children}
