@@ -36,7 +36,67 @@ const AGENT_DETAILS: Record<string, { mandate: string; style: string; weights: s
   Populist:  { mandate: "Represent the community — especially small token holders and new participants.",  style: "Passionate, accessible language. Champions fairness and transparency.",          weights: ["Community: 50%", "Small Holders: 30%", "Accessibility: 20%"],              accent: "#ef4444" },
 };
 
-const FOCUS_AREAS = ["Security", "DeFi/Economics", "Technical", "Community", "Ecosystem", "Risk Management", "Innovation"];
+interface FocusPreset {
+  icon: string;
+  style: number;
+  weights: { sec: number; eco: number; com: number; tech: number };
+  mandatePlaceholder: string;
+  description: string;
+}
+
+const FOCUS_PRESETS: Record<string, FocusPreset> = {
+  "Security": {
+    icon: "🛡️",
+    style: 18,
+    weights: { sec: 55, eco: 15, com: 15, tech: 15 },
+    mandatePlaceholder: "reject any proposal that introduces unaudited code or untested attack surfaces",
+    description: "Prioritizes protocol safety above all. Skeptical of rapid changes.",
+  },
+  "DeFi/Economics": {
+    icon: "💰",
+    style: 68,
+    weights: { sec: 20, eco: 55, com: 10, tech: 15 },
+    mandatePlaceholder: "maximize protocol revenue and TVL while maintaining sustainable tokenomics",
+    description: "Driven by economic metrics — ROI, TVL, fee efficiency, yield.",
+  },
+  "Technical": {
+    icon: "⚙️",
+    style: 45,
+    weights: { sec: 20, eco: 15, com: 10, tech: 55 },
+    mandatePlaceholder: "only approve proposals with clear implementation plans and audited smart contracts",
+    description: "Evaluates feasibility, code quality, and scalability first.",
+  },
+  "Community": {
+    icon: "👥",
+    style: 72,
+    weights: { sec: 10, eco: 20, com: 55, tech: 15 },
+    mandatePlaceholder: "champion fairness for small holders and prioritize broad community benefit",
+    description: "Voices the community — accessibility, fairness, and inclusion.",
+  },
+  "Ecosystem": {
+    icon: "🌐",
+    style: 60,
+    weights: { sec: 15, eco: 30, com: 35, tech: 20 },
+    mandatePlaceholder: "support proposals that grow the X Layer ecosystem and attract new projects",
+    description: "Thinks long-term — partnerships, ecosystem growth, reputation.",
+  },
+  "Risk Management": {
+    icon: "⚠️",
+    style: 12,
+    weights: { sec: 45, eco: 25, com: 10, tech: 20 },
+    mandatePlaceholder: "block any proposal where expected downside risk exceeds projected upside",
+    description: "Ultra-conservative. Models worst-case scenarios before approving.",
+  },
+  "Innovation": {
+    icon: "🚀",
+    style: 85,
+    weights: { sec: 10, eco: 30, com: 20, tech: 40 },
+    mandatePlaceholder: "embrace bold technical innovation that positions the protocol ahead of competitors",
+    description: "Progressive and forward-looking. Backs high-upside experiments.",
+  },
+};
+
+const FOCUS_AREAS = Object.keys(FOCUS_PRESETS);
 
 const RANK_STYLE: Record<string, { badge: string; icon: string }> = {
   Gold:   { badge: "bg-yellow-900/40 text-yellow-300 border-yellow-600/40", icon: "🥇" },
@@ -110,9 +170,18 @@ export default function AgentsPage() {
   // Create form state
   const [agentName, setAgentName]     = useState("");
   const [focusArea, setFocusArea]     = useState("Community");
-  const [style, setStyle]             = useState(50);
-  const [weights, setWeights]         = useState({ sec: 25, eco: 25, com: 25, tech: 25 });
+  const [style, setStyle]             = useState(FOCUS_PRESETS["Community"].style);
+  const [weights, setWeights]         = useState(FOCUS_PRESETS["Community"].weights);
   const [mandate, setMandate]         = useState("");
+
+  function selectFocusArea(area: string) {
+    const preset = FOCUS_PRESETS[area];
+    setFocusArea(area);
+    setStyle(preset.style);
+    setWeights(preset.weights);
+    // Only clear mandate if it's empty or was the previous preset placeholder
+    // Don't override if user has typed something custom
+  }
   const [showPrompt, setShowPrompt]   = useState(false);
   const [customMode, setCustomMode]   = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");
@@ -448,21 +517,29 @@ export default function AgentsPage() {
                     <div className="text-[10px] text-gray-700 mt-1">{agentName.length}/24 characters</div>
                   </div>
                   <div>
-                    <label className="text-xs text-gray-400 mb-1.5 block">Focus Area</label>
-                    <div className="flex flex-wrap gap-2">
-                      {FOCUS_AREAS.map(f => (
-                        <button
-                          key={f}
-                          onClick={() => setFocusArea(f)}
-                          className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                            focusArea === f
-                              ? "bg-purple-600/30 border-purple-500/50 text-purple-300"
-                              : "border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
-                          }`}
-                        >
-                          {f}
-                        </button>
-                      ))}
+                    <label className="text-xs text-gray-400 mb-2 block">Focus Area <span className="text-gray-700">— presets slider values automatically</span></label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {FOCUS_AREAS.map(f => {
+                        const preset = FOCUS_PRESETS[f];
+                        const isSelected = focusArea === f;
+                        return (
+                          <button
+                            key={f}
+                            onClick={() => selectFocusArea(f)}
+                            className={`flex items-start gap-2.5 text-left px-3 py-2.5 rounded-xl border transition-all ${
+                              isSelected
+                                ? "bg-purple-600/20 border-purple-500/50 text-purple-300"
+                                : "border-gray-800 text-gray-500 hover:border-gray-700 hover:text-gray-400 bg-gray-900/30"
+                            }`}
+                          >
+                            <span className="text-base shrink-0 mt-0.5">{preset.icon}</span>
+                            <div className="min-w-0">
+                              <div className={`text-xs font-semibold ${isSelected ? "text-purple-300" : "text-gray-400"}`}>{f}</div>
+                              <div className="text-[10px] text-gray-600 mt-0.5 leading-snug">{preset.description}</div>
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -571,7 +648,7 @@ export default function AgentsPage() {
                           type="text"
                           value={mandate}
                           onChange={e => setMandate(e.target.value)}
-                          placeholder="e.g. protect small holders above all else"
+                          placeholder={FOCUS_PRESETS[focusArea]?.mandatePlaceholder ?? "protect small holders above all else"}
                           className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-purple-500"
                         />
                       </div>
