@@ -14,6 +14,7 @@ export const maxDuration = 60;
 import { NextRequest, NextResponse } from "next/server";
 import { dbCreateProposal, initSchema } from "@/lib/db";
 import { claudeCompleteJson } from "@/lib/agents";
+import { hasOkxKeys, okxGetTokenPrice, okxX402Verify } from "@/lib/okx";
 
 const PROPOSAL_THRESHOLD_XSEN = 1000; // must match governor contract
 
@@ -34,6 +35,11 @@ const XSEN_USD_FEE   = 10;
 const FALLBACK_PRICE = 0.01;
 
 async function getRequiredXsenWei(): Promise<bigint> {
+  // Try OKX OnchainOS market price (authenticated if keys available)
+  const okxPrice = hasOkxKeys() ? await okxGetTokenPrice("196", XSEN_ADDRESS) : null;
+  if (okxPrice && okxPrice > 0) return BigInt(Math.ceil((XSEN_USD_FEE / okxPrice) * 1e18));
+
+  // Fallback: unauthenticated OKX market price call
   try {
     const res = await fetch("https://web3.okx.com/api/v6/dex/market/price", {
       method: "POST",
@@ -49,6 +55,23 @@ async function getRequiredXsenWei(): Promise<bigint> {
 }
 
 async function verifyPayment(txHash: string, requiredWei: bigint): Promise<{ ok: boolean; error?: string }> {
+  // Primary: OKX OnchainOS x402/verify
+  if (hasOkxKeys()) {
+    const okx = await okxX402Verify({
+      txHash,
+      chainIndex: "196",
+      tokenAddress: XSEN_ADDRESS,
+      toAddress: TREASURY,
+      amount: requiredWei.toString(),
+    });
+    if (okx.verified) return { ok: true };
+    // If OKX returns a definitive rejection, trust it
+    if (okx.error && !okx.error.includes("unavailable")) {
+      return { ok: false, error: okx.error };
+    }
+  }
+
+  // Fallback: direct X Layer RPC verification
   try {
     const res = await fetch(XLAYER_RPC, {
       method: "POST",

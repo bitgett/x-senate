@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbCreateUGA, initSchema } from "@/lib/db";
+import { hasOkxKeys, okxGetTokenPrice, okxX402Verify } from "@/lib/okx";
 
 const XLAYER_RPC   = "https://rpc.xlayer.tech";
 const XSEN_ADDRESS = "0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b".toLowerCase();
@@ -9,6 +10,8 @@ const XSEN_USD_FEE   = 10;
 const FALLBACK_PRICE = 0.01;
 
 async function getRequiredXsenWei(): Promise<bigint> {
+  const okxPrice = hasOkxKeys() ? await okxGetTokenPrice("196", XSEN_ADDRESS) : null;
+  if (okxPrice && okxPrice > 0) return BigInt(Math.ceil((XSEN_USD_FEE / okxPrice) * 1e18));
   try {
     const res = await fetch("https://web3.okx.com/api/v6/dex/market/price", {
       method: "POST",
@@ -24,6 +27,11 @@ async function getRequiredXsenWei(): Promise<bigint> {
 }
 
 async function verifyPayment(txHash: string, requiredWei: bigint): Promise<{ ok: boolean; error?: string }> {
+  if (hasOkxKeys()) {
+    const okx = await okxX402Verify({ txHash, chainIndex: "196", tokenAddress: XSEN_ADDRESS, toAddress: TREASURY, amount: requiredWei.toString() });
+    if (okx.verified) return { ok: true };
+    if (okx.error && !okx.error.includes("unavailable")) return { ok: false, error: okx.error };
+  }
   try {
     const res = await fetch(XLAYER_RPC, {
       method: "POST",
@@ -35,7 +43,6 @@ async function verifyPayment(txHash: string, requiredWei: bigint): Promise<{ ok:
     const receipt = data.result;
     if (!receipt) return { ok: false, error: "Transaction not found or pending" };
     if (receipt.status !== "0x1") return { ok: false, error: "Transaction failed on-chain" };
-
     let received = 0n;
     for (const log of (receipt.logs ?? [])) {
       if (

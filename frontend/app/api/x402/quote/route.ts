@@ -7,6 +7,7 @@
  *   3. Fallback $0.01
  */
 import { NextResponse } from "next/server";
+import { hasOkxKeys, okxGetTokenPrice } from "@/lib/okx";
 
 const XSEN_ADDRESS   = "0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b";
 const XSEN_POOL      = "0xb524efba890ed7087a4188b9b0148eb7fb954da9"; // X Layer DEX pool
@@ -109,7 +110,8 @@ async function tryPoolPrice(): Promise<number | null> {
 
 // ── Route handler ──────────────────────────────────────────────────────────
 export async function GET() {
-  const [marketPrice, poolPrice] = await Promise.all([
+  const [authedPrice, marketPrice, poolPrice] = await Promise.all([
+    hasOkxKeys() ? okxGetTokenPrice("196", XSEN_ADDRESS) : Promise.resolve(null),
     tryOkxMarketV6(),
     tryPoolPrice(),
   ]);
@@ -118,7 +120,10 @@ export async function GET() {
   let priceSource   = "fallback";
   let fallbackReason: string | null = null;
 
-  if (marketPrice && marketPrice > 0) {
+  if (authedPrice && authedPrice > 0) {
+    xsenPrice   = authedPrice;
+    priceSource = "okx_market_v6_auth";
+  } else if (marketPrice && marketPrice > 0) {
     xsenPrice   = marketPrice;
     priceSource = "okx_market_v6";
   } else if (poolPrice && poolPrice > 0) {
