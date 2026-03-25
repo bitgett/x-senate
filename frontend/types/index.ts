@@ -21,6 +21,7 @@ export interface Proposal {
   snapshot_url?: string;
   tx_hash?: string;
   one_liner_opinions?: string;
+  proposer_address?: string;
   created_at: string;
 }
 
@@ -41,6 +42,7 @@ export interface AgentVote {
   chain_of_thought: string;
   confidence: number;
   reflection_notes?: string;
+  voted_at?: string;
 }
 
 export interface DebateTurn {

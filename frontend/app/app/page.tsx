@@ -367,7 +367,7 @@ export default function GovernancePage() {
                     if (!form.title || !form.summary || !form.motivation || !form.proposed_action) return;
                     setSubmitting(true);
                     try {
-                      const res = await fetch("/api/proposals/submit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+                      const res = await fetch("/api/proposals/submit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, submitter_address: wallet ?? undefined }) });
                       const data = await res.json();
                       setSubmitResult({ ...data, status: res.status });
                       if (res.status === 201) { const updated = await fetchProposals(); setProposals(updated); }

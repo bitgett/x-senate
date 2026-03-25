@@ -28,6 +28,7 @@ export interface ProposalRow {
   snapshot_url: string | null;
   tx_hash: string | null;
   one_liner_opinions: string | null;
+  proposer_address: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -41,6 +42,7 @@ export interface AgentVoteRow {
   chain_of_thought: string;
   confidence: number;
   reflection_notes: string | null;
+  voted_at: string | null;
 }
 
 export interface DebateTurnRow {
@@ -73,10 +75,13 @@ export async function initSchema() {
       snapshot_url     TEXT,
       tx_hash          TEXT,
       one_liner_opinions TEXT,
+      proposer_address TEXT,
       created_at       TIMESTAMPTZ DEFAULT NOW(),
       updated_at       TIMESTAMPTZ DEFAULT NOW()
     )
   `;
+  await sql`ALTER TABLE proposals ADD COLUMN IF NOT EXISTS proposer_address TEXT`;
+  await sql`ALTER TABLE agent_votes ADD COLUMN IF NOT EXISTS voted_at TIMESTAMPTZ DEFAULT NOW()`;
   await sql`
     CREATE TABLE IF NOT EXISTS agent_votes (
       id               SERIAL PRIMARY KEY,
@@ -86,7 +91,8 @@ export async function initSchema() {
       reason           TEXT,
       chain_of_thought TEXT,
       confidence       INTEGER DEFAULT 0,
-      reflection_notes TEXT
+      reflection_notes TEXT,
+      voted_at         TIMESTAMPTZ DEFAULT NOW()
     )
   `;
   await sql`
@@ -127,13 +133,14 @@ export async function dbCreateProposal(data: Omit<ProposalRow, "id" | "created_a
     INSERT INTO proposals (
       id, project_id, title, summary, motivation, proposed_action,
       potential_risks, sentinel_analysis, source_data, status,
-      approve_count, reject_count
+      approve_count, reject_count, proposer_address
     ) VALUES (
       ${id}, ${data.project_id || "XSEN"}, ${data.title}, ${data.summary},
       ${data.motivation ?? null}, ${data.proposed_action ?? null},
       ${data.potential_risks ?? null}, ${data.sentinel_analysis ?? null},
       ${data.source_data ?? null}, ${data.status || "Draft"},
-      ${data.approve_count || 0}, ${data.reject_count || 0}
+      ${data.approve_count || 0}, ${data.reject_count || 0},
+      ${(data as any).proposer_address ?? null}
     ) RETURNING *
   ` as ProposalRow[];
   return rows[0];

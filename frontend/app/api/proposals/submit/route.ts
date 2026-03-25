@@ -86,6 +86,7 @@ Respond with JSON:
       potential_risks: potential_risks ?? null,
       sentinel_analysis: `[Manual submission — Sentinel score: ${score}/100] ${feedback}`,
       source_data: JSON.stringify({ type: "manual", submitter: submitter_address ?? "unknown" }),
+      proposer_address: submitter_address ?? null,
       status: "Draft",
       approve_count: 0,
       reject_count: 0,
