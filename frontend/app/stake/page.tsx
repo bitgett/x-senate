@@ -412,7 +412,6 @@ export default function StakePage() {
         </div>
 
       </div>
-    </div>
 
       {/* Wallet selection modal */}
       {showWalletModal && (
@@ -454,5 +453,6 @@ export default function StakePage() {
           </div>
         </div>
       )}
+    </div>
   );
 }
