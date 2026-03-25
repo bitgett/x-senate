@@ -186,8 +186,10 @@ export default function AgentsPage() {
   const [customMode, setCustomMode]   = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");
   const [avatarBase64, setAvatarBase64] = useState<string | null>(null);
-  const [registering, setRegistering] = useState(false);
-  const [registerResult, setRegResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [registering, setRegistering]  = useState(false);
+  const [registerResult, setRegResult]  = useState<{ ok: boolean; msg: string } | null>(null);
+  const [payStep, setPayStep]           = useState<"idle" | "fetching" | "paying" | "verifying" | "done">("idle");
+  const [payQuote, setPayQuote]         = useState<{ xsen_amount: number; usd_fee: number; xsen_price_usd: number } | null>(null);
 
   function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -276,21 +278,41 @@ export default function AgentsPage() {
     if (!agentName.trim()) { setRegResult({ ok: false, msg: "Agent name is required." }); return; }
     setRegistering(true);
     setRegResult(null);
+    setPayStep("fetching");
     try {
+      // Step 1: Get x402 quote (live XSEN price from OKX Market API)
+      const quoteRes = await fetch("/api/x402/quote");
+      const quote = await quoteRes.json();
+      setPayQuote(quote);
+      setPayStep("paying");
+
+      // Step 2: Transfer XSEN to treasury
+      const TOKEN_ABI = ["function transfer(address to, uint256 amount) returns (bool)"];
+      const provider = new ethers.BrowserProvider(rawProvider());
+      const signer = await provider.getSigner();
+      const token = new ethers.Contract(quote.xsen_token, TOKEN_ABI, signer);
+      const tx = await token.transfer(quote.treasury, BigInt(quote.xsen_amount_wei));
+      setPayStep("verifying");
+      await tx.wait();
+
+      // Step 3: Register with payment proof
+      setPayStep("done");
       await registerUGA({
         wallet_address: wallet,
         agent_name: agentName.trim(),
         system_prompt: customMode ? customPrompt : buildSystemPrompt({ name: agentName.trim(), focus: focusArea, style, ...weights, mandate }),
         focus_area: focusArea,
         avatar_base64: avatarBase64 ?? undefined,
+        payment_tx_hash: tx.hash,
       } as any);
-      setRegResult({ ok: true, msg: `Agent "${agentName.trim()}" registered successfully!` });
+      setRegResult({ ok: true, msg: `Agent "${agentName.trim()}" registered! Payment: ${Math.ceil(quote.xsen_amount).toLocaleString()} XSEN ($${quote.usd_fee})` });
       await loadUgas();
-      setTimeout(() => setTab("mine"), 1200);
+      setTimeout(() => setTab("mine"), 1500);
     } catch (e: any) {
       setRegResult({ ok: false, msg: e.message ?? "Registration failed" });
     }
     setRegistering(false);
+    setPayStep("idle");
   }
 
   const myAgent = wallet ? ugas.find(u => u.wallet_address.toLowerCase() === wallet.toLowerCase()) : null;
@@ -775,7 +797,36 @@ export default function AgentsPage() {
                   )}
                 </div>
 
-                {/* Register button */}
+                {/* x402 payment status */}
+                {registering && payStep !== "idle" && (
+                  <div className="rounded-xl border border-yellow-700/30 bg-yellow-950/20 p-3 text-xs space-y-1.5">
+                    <div className="flex items-center gap-2 text-yellow-400 font-semibold">
+                      <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" strokeOpacity="0.3"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+                      x402 Payment in Progress
+                    </div>
+                    {payQuote && (
+                      <div className="text-yellow-300/70">
+                        Fee: <span className="font-bold text-yellow-300">{Math.ceil(payQuote.xsen_amount).toLocaleString()} XSEN</span>
+                        {" "}≈ ${payQuote.usd_fee} · XSEN @ ${payQuote.xsen_price_usd.toFixed(4)}
+                      </div>
+                    )}
+                    <div className="flex gap-3 text-[11px]">
+                      {["fetching", "paying", "verifying", "done"].map((s, i) => {
+                        const steps = ["fetching", "paying", "verifying", "done"];
+                        const idx = steps.indexOf(payStep);
+                        const done = i < idx;
+                        const active = i === idx;
+                        return (
+                          <span key={s} className={done ? "text-green-400" : active ? "text-yellow-300 font-semibold" : "text-gray-600"}>
+                            {done ? "✓" : active ? "→" : "○"} {["Quote", "Paying", "Verifying", "Done"][i]}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Register result */}
                 {registerResult && (
                   <div className={`rounded-xl p-3 text-xs border ${registerResult.ok ? "bg-green-900/20 border-green-700/40 text-green-300" : "bg-red-900/20 border-red-700/40 text-red-300"}`}>
                     {registerResult.msg}
@@ -788,7 +839,12 @@ export default function AgentsPage() {
                   className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-all text-sm"
                   style={{ boxShadow: "0 0 20px rgba(139,92,246,0.25)" }}
                 >
-                  {registering ? "Processing..." : wallet ? `Register ${agentName || "Agent"} — 1,000 XSEN` : "Connect Wallet to Register"}
+                  {registering
+                    ? payStep === "fetching"   ? "Getting price quote..."
+                    : payStep === "paying"     ? "Confirm XSEN payment in wallet..."
+                    : payStep === "verifying"  ? "Verifying payment on-chain..."
+                    : "Registering agent..."
+                    : wallet ? `Pay & Register ${agentName || "Agent"} — ~$10 in XSEN` : "Connect Wallet to Register"}
                 </button>
                 <p className="text-[11px] text-gray-700 text-center">
                   1,000 XSEN registration fee · Name must be unique · Earn 3% creator rewards

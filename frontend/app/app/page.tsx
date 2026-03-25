@@ -72,6 +72,8 @@ export default function GovernancePage() {
   const [form, setForm]                 = useState(EMPTY_FORM);
   const [submitting, setSubmitting]     = useState(false);
   const [submitResult, setSubmitResult] = useState<any>(null);
+  const [submitPayStep, setSubmitPayStep] = useState<"idle" | "fetching" | "paying" | "verifying" | "done">("idle");
+  const [submitQuote, setSubmitQuote]   = useState<{ xsen_amount: number; usd_fee: number; xsen_price_usd: number; xsen_amount_wei: string; treasury: string; xsen_token: string } | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -362,22 +364,81 @@ export default function GovernancePage() {
                     )}
                   </div>
                 ))}
+                {/* x402 payment status */}
+                {submitting && submitPayStep !== "idle" && (
+                  <div className="rounded-xl border border-yellow-700/30 bg-yellow-950/20 p-3 text-xs space-y-1.5">
+                    <div className="flex items-center gap-2 text-yellow-400 font-semibold">
+                      <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" strokeOpacity="0.3"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+                      x402 Payment in Progress
+                    </div>
+                    {submitQuote && (
+                      <div className="text-yellow-300/70">
+                        Fee: <span className="font-bold text-yellow-300">{Math.ceil(submitQuote.xsen_amount).toLocaleString()} XSEN</span>
+                        {" "}≈ ${submitQuote.usd_fee} · XSEN @ ${submitQuote.xsen_price_usd.toFixed(4)}
+                      </div>
+                    )}
+                    <div className="flex gap-3 text-[11px]">
+                      {["fetching", "paying", "verifying", "done"].map((s, i) => {
+                        const steps = ["fetching", "paying", "verifying", "done"];
+                        const idx = steps.indexOf(submitPayStep);
+                        const done = i < idx;
+                        const active = i === idx;
+                        return (
+                          <span key={s} className={done ? "text-green-400" : active ? "text-yellow-300 font-semibold" : "text-gray-600"}>
+                            {done ? "✓" : active ? "→" : "○"} {["Quote", "Paying", "Verifying", "AI Review"][i]}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 <button
                   onClick={async () => {
                     if (!form.title || !form.summary || !form.motivation || !form.proposed_action) return;
                     setSubmitting(true);
+                    setSubmitPayStep("fetching");
+                    setSubmitResult(null);
                     try {
-                      const res = await fetch("/api/proposals/submit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, submitter_address: wallet ?? undefined }) });
+                      // Step 1: Get x402 quote
+                      const quoteRes = await fetch("/api/x402/quote");
+                      const quote = await quoteRes.json();
+                      setSubmitQuote(quote);
+                      setSubmitPayStep("paying");
+
+                      // Step 2: Pay XSEN to treasury
+                      const TOKEN_ABI = ["function transfer(address to, uint256 amount) returns (bool)"];
+                      const provider = new ethers.BrowserProvider(rawProvider());
+                      const signer = await provider.getSigner();
+                      const token = new ethers.Contract(quote.xsen_token, TOKEN_ABI, signer);
+                      const payTx = await token.transfer(quote.treasury, BigInt(quote.xsen_amount_wei));
+                      setSubmitPayStep("verifying");
+                      await payTx.wait();
+
+                      // Step 3: Submit proposal with payment proof
+                      setSubmitPayStep("done");
+                      const res = await fetch("/api/proposals/submit", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ ...form, submitter_address: wallet ?? undefined, payment_tx_hash: payTx.hash }),
+                      });
                       const data = await res.json();
-                      setSubmitResult({ ...data, status: res.status });
+                      setSubmitResult({ ...data, status: res.status, payment_tx: payTx.hash });
                       if (res.status === 201) { const updated = await fetchProposals(); setProposals(updated); }
-                    } catch { setSubmitResult({ approved: false, feedback: "Network error" }); }
+                    } catch (e: any) {
+                      setSubmitResult({ approved: false, feedback: e.message?.slice(0, 120) ?? "Error" });
+                    }
                     setSubmitting(false);
+                    setSubmitPayStep("idle");
                   }}
-                  disabled={submitting || !form.title || !form.summary || !form.motivation || !form.proposed_action}
+                  disabled={submitting || !form.title || !form.summary || !form.motivation || !form.proposed_action || !wallet}
                   className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors"
                 >
-                  {submitting ? "Sentinel is reviewing..." : "Submit for Sentinel Review"}
+                  {submitting
+                    ? submitPayStep === "fetching"  ? "Getting price quote..."
+                    : submitPayStep === "paying"    ? "Confirm XSEN payment in wallet..."
+                    : submitPayStep === "verifying" ? "Verifying payment on-chain..."
+                    : "Sentinel is reviewing..."
+                    : wallet ? "Pay & Submit (~$10 in XSEN)" : "Connect Wallet to Submit"}
                 </button>
               </div>
             ) : (
