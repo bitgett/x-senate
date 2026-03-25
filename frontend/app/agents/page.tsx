@@ -114,6 +114,8 @@ export default function AgentsPage() {
   const [weights, setWeights]         = useState({ sec: 25, eco: 25, com: 25, tech: 25 });
   const [mandate, setMandate]         = useState("");
   const [showPrompt, setShowPrompt]   = useState(false);
+  const [customMode, setCustomMode]   = useState(false);
+  const [customPrompt, setCustomPrompt] = useState("");
   const [registering, setRegistering] = useState(false);
   const [registerResult, setRegResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
@@ -197,7 +199,9 @@ export default function AgentsPage() {
   }
 
   const myAgent = wallet ? ugas.find(u => u.wallet_address.toLowerCase() === wallet.toLowerCase()) : null;
-  const generatedPrompt = buildSystemPrompt({ name: agentName || "MyAgent", focus: focusArea, style, ...weights, mandate });
+  const generatedPrompt = customMode
+    ? customPrompt
+    : buildSystemPrompt({ name: agentName || "MyAgent", focus: focusArea, style, ...weights, mandate });
   const mockVote = getMockVote({ ...weights, style });
 
   return (
@@ -267,9 +271,9 @@ export default function AgentsPage() {
                 const details = AGENT_DETAILS[name];
                 const lb = leaderboard.find(l => l.agent_name === name);
                 return (
-                  <div key={name} className="bg-gray-900/60 border border-gray-800/60 rounded-2xl p-4 space-y-3 hover:border-gray-700 transition-colors"
+                  <div key={name} className="flex flex-col bg-gray-900/60 border border-gray-800/60 rounded-2xl p-4 hover:border-gray-700 transition-colors"
                     style={{ borderTopColor: details?.accent, borderTopWidth: "2px" }}>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <span className="text-2xl">{meta.emoji}</span>
                         <div>
@@ -282,18 +286,18 @@ export default function AgentsPage() {
                       )}
                     </div>
 
-                    <p className="text-gray-400 text-xs leading-relaxed">{details?.mandate}</p>
+                    <p className="text-gray-400 text-xs leading-relaxed mb-3">{details?.mandate}</p>
 
-                    <div className="space-y-1">
+                    <div className="space-y-1 flex-1">
                       {details?.weights.map(w => (
                         <div key={w} className="flex items-center gap-1.5 text-[11px] text-gray-500">
-                          <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: details.accent }} />
+                          <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: details.accent }} />
                           {w}
                         </div>
                       ))}
                     </div>
 
-                    <div className="pt-2 border-t border-gray-800/60 flex items-center justify-between">
+                    <div className="mt-3 pt-2 border-t border-gray-800/60 flex items-center justify-between mb-2">
                       <div className="flex items-center gap-1.5 text-[11px] text-green-400">
                         <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                         Online
@@ -416,8 +420,16 @@ export default function AgentsPage() {
 
             <div className="border border-gray-800/60 rounded-2xl overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-800/40 bg-gray-900/30">
-                <h2 className="font-semibold text-white">Agent Builder</h2>
-                <p className="text-xs text-gray-500 mt-0.5">Design your AI agent's personality and governance focus</p>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="font-semibold text-white">Agent Builder</h2>
+                    <p className="text-xs text-gray-500 mt-0.5">Design your AI agent's personality and governance focus</p>
+                  </div>
+                  <div className="shrink-0 flex items-center gap-1.5 bg-yellow-900/20 border border-yellow-700/40 rounded-full px-3 py-1.5">
+                    <span className="text-yellow-400 text-xs font-bold">1,000 XSEN</span>
+                    <span className="text-yellow-600 text-[11px]">registration fee</span>
+                  </div>
+                </div>
               </div>
 
               <div className="p-6 space-y-6">
@@ -457,71 +469,114 @@ export default function AgentsPage() {
 
                 <div className="h-px bg-gray-800" />
 
-                {/* Step 2: Personality Builder */}
+                {/* Step 2: Personality Builder — with Custom Prompt toggle */}
                 <div className="space-y-4">
-                  <div className="text-xs text-gray-600 uppercase tracking-widest">Step 2 — Personality</div>
-
-                  {/* Style slider */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-xs text-gray-400">Decision Style</label>
-                      <span className="text-xs text-gray-500">{style < 33 ? "Conservative" : style < 66 ? "Balanced" : "Progressive"}</span>
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-gray-600 uppercase tracking-widest">Step 2 — Personality</div>
+                    {/* Toggle: Builder vs Custom Prompt */}
+                    <div className="flex items-center gap-1 bg-gray-800 rounded-full p-0.5">
+                      <button
+                        onClick={() => setCustomMode(false)}
+                        className={`text-[11px] px-3 py-1 rounded-full transition-all ${!customMode ? "bg-purple-600 text-white font-semibold" : "text-gray-500 hover:text-gray-400"}`}
+                      >
+                        Builder
+                      </button>
+                      <button
+                        onClick={() => setCustomMode(true)}
+                        className={`text-[11px] px-3 py-1 rounded-full transition-all ${customMode ? "bg-purple-600 text-white font-semibold" : "text-gray-500 hover:text-gray-400"}`}
+                      >
+                        Custom Prompt
+                      </button>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-[10px] text-gray-600 shrink-0">Conservative</span>
-                      <input
-                        type="range" min={0} max={100} value={style}
-                        onChange={e => setStyle(Number(e.target.value))}
-                        className="flex-1 accent-purple-500 h-1.5 cursor-pointer"
+                  </div>
+
+                  {customMode ? (
+                    /* Custom prompt mode */
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs text-gray-400">Your System Prompt <span className="text-gray-700">(max 10 lines)</span></label>
+                        <span className="text-[11px] text-gray-600">{customPrompt.split("\n").length}/10 lines</span>
+                      </div>
+                      <textarea
+                        rows={8}
+                        value={customPrompt}
+                        onChange={e => {
+                          const lines = e.target.value.split("\n");
+                          if (lines.length <= 10) setCustomPrompt(e.target.value);
+                        }}
+                        placeholder={`You are [AgentName], a governance agent on X-Senate.\n\nMANDATE: Vote to protect long-term protocol health.\n\nWhen reviewing proposals, respond in JSON:\n{"vote": "Approve" or "Reject", "reason": "...", "chain_of_thought": "...", "confidence": 0-100}`}
+                        className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white text-xs font-mono placeholder-gray-700 focus:outline-none focus:border-purple-500 resize-none leading-relaxed"
                       />
-                      <span className="text-[10px] text-gray-600 shrink-0">Progressive</span>
+                      <p className="text-[11px] text-gray-700">
+                        Write your full agent system prompt. The sliders are disabled in Custom Prompt mode. Your prompt controls all voting behavior.
+                      </p>
                     </div>
-                  </div>
+                  ) : (
+                    /* Builder mode */
+                    <>
+                      {/* Style slider */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-xs text-gray-400">Decision Style</label>
+                          <span className="text-xs text-gray-500">{style < 33 ? "Conservative" : style < 66 ? "Balanced" : "Progressive"}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] text-gray-600 shrink-0">Conservative</span>
+                          <input
+                            type="range" min={0} max={100} value={style}
+                            onChange={e => setStyle(Number(e.target.value))}
+                            className="flex-1 accent-purple-500 h-1.5 cursor-pointer"
+                          />
+                          <span className="text-[10px] text-gray-600 shrink-0">Progressive</span>
+                        </div>
+                      </div>
 
-                  {/* Voting weights */}
-                  <div>
-                    <label className="text-xs text-gray-400 mb-3 block">Voting Priorities <span className="text-gray-700">(sum = 100%)</span></label>
-                    <div className="space-y-3">
-                      {(["sec", "eco", "com", "tech"] as const).map((key) => {
-                        const labels = { sec: "Security & Risk", eco: "Economic Impact", com: "Community Benefit", tech: "Technical Feasibility" };
-                        const colors = { sec: "#3b82f6", eco: "#eab308", com: "#22c55e", tech: "#a855f7" };
-                        return (
-                          <div key={key}>
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs text-gray-400">{labels[key]}</span>
-                              <span className="text-xs font-mono font-bold text-white">{weights[key]}%</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
-                                <div
-                                  className="h-full rounded-full transition-all"
-                                  style={{ width: `${weights[key]}%`, backgroundColor: colors[key] }}
-                                />
+                      {/* Voting weights */}
+                      <div>
+                        <label className="text-xs text-gray-400 mb-3 block">Voting Priorities <span className="text-gray-700">(sum = 100%)</span></label>
+                        <div className="space-y-3">
+                          {(["sec", "eco", "com", "tech"] as const).map((key) => {
+                            const labels = { sec: "Security & Risk", eco: "Economic Impact", com: "Community Benefit", tech: "Technical Feasibility" };
+                            const colors = { sec: "#3b82f6", eco: "#eab308", com: "#22c55e", tech: "#a855f7" };
+                            return (
+                              <div key={key}>
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs text-gray-400">{labels[key]}</span>
+                                  <span className="text-xs font-mono font-bold text-white">{weights[key]}%</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full rounded-full transition-all"
+                                      style={{ width: `${weights[key]}%`, backgroundColor: colors[key] }}
+                                    />
+                                  </div>
+                                  <input
+                                    type="range" min={0} max={100} value={weights[key]}
+                                    onChange={e => setWeight(key, Number(e.target.value))}
+                                    className="w-20 cursor-pointer"
+                                    style={{ accentColor: colors[key] }}
+                                  />
+                                </div>
                               </div>
-                              <input
-                                type="range" min={0} max={100} value={weights[key]}
-                                onChange={e => setWeight(key, Number(e.target.value))}
-                                className="w-20 accent-purple-500 cursor-pointer"
-                                style={{ accentColor: colors[key] }}
-                              />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                            );
+                          })}
+                        </div>
+                      </div>
 
-                  {/* Mandate */}
-                  <div>
-                    <label className="text-xs text-gray-400 mb-1.5 block">Mandate <span className="text-gray-700">(optional — "My agent votes to...")</span></label>
-                    <input
-                      type="text"
-                      value={mandate}
-                      onChange={e => setMandate(e.target.value)}
-                      placeholder="e.g. protect small holders above all else"
-                      className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-purple-500"
-                    />
-                  </div>
+                      {/* Mandate */}
+                      <div>
+                        <label className="text-xs text-gray-400 mb-1.5 block">Mandate <span className="text-gray-700">(optional — "My agent votes to...")</span></label>
+                        <input
+                          type="text"
+                          value={mandate}
+                          onChange={e => setMandate(e.target.value)}
+                          placeholder="e.g. protect small holders above all else"
+                          className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-purple-500"
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <div className="h-px bg-gray-800" />
@@ -530,38 +585,49 @@ export default function AgentsPage() {
                 <div className="space-y-4">
                   <div className="text-xs text-gray-600 uppercase tracking-widest">Step 3 — Preview</div>
 
-                  {/* Mock vote preview */}
-                  <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
-                    <div className="text-[11px] text-gray-600 mb-2 uppercase tracking-wide">How your agent would vote</div>
-                    <div className="text-xs text-gray-500 mb-3 italic">
-                      Sample: "Increase XSEN Staking Reward Pool by 15%"
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-bold ${mockVote.vote === "Approve" ? "bg-green-900/40 text-green-300 border border-green-700/40" : "bg-red-900/40 text-red-300 border border-red-700/40"}`}>
-                        {mockVote.vote}
+                  {/* Mock vote preview — only in builder mode */}
+                  {!customMode && (
+                    <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
+                      <div className="text-[11px] text-gray-600 mb-2 uppercase tracking-wide">How your agent would vote</div>
+                      <div className="text-xs text-gray-500 mb-3 italic">
+                        Sample: "Increase XSEN Staking Reward Pool by 15%"
                       </div>
-                      <div>
-                        <div className="text-xs text-gray-400 mb-1">{mockVote.confidence}% confidence</div>
-                        <div className="text-xs text-gray-500 italic">"{mockVote.reason}"</div>
+                      <div className="flex items-start gap-3">
+                        <div className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-bold ${mockVote.vote === "Approve" ? "bg-green-900/40 text-green-300 border border-green-700/40" : "bg-red-900/40 text-red-300 border border-red-700/40"}`}>
+                          {mockVote.vote}
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-400 mb-1">{mockVote.confidence}% confidence</div>
+                          <div className="text-xs text-gray-500 italic">"{mockVote.reason}"</div>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* System prompt preview */}
-                  <div className="border border-gray-800 rounded-xl overflow-hidden">
-                    <button
-                      onClick={() => setShowPrompt(!showPrompt)}
-                      className="w-full flex items-center justify-between px-4 py-3 text-xs text-gray-500 hover:text-gray-400 hover:bg-gray-800/30 transition-colors"
-                    >
-                      <span>View generated system prompt</span>
-                      <span>{showPrompt ? "▲" : "▼"}</span>
-                    </button>
-                    {showPrompt && (
-                      <pre className="px-4 pb-4 text-[11px] text-gray-500 whitespace-pre-wrap leading-relaxed border-t border-gray-800 pt-3 font-mono">
-                        {generatedPrompt}
-                      </pre>
-                    )}
-                  </div>
+                  {!customMode && (
+                    <div className="border border-gray-800 rounded-xl overflow-hidden">
+                      <button
+                        onClick={() => setShowPrompt(!showPrompt)}
+                        className="w-full flex items-center justify-between px-4 py-3 text-xs text-gray-500 hover:text-gray-400 hover:bg-gray-800/30 transition-colors"
+                      >
+                        <span>View generated system prompt</span>
+                        <span>{showPrompt ? "▲" : "▼"}</span>
+                      </button>
+                      {showPrompt && (
+                        <pre className="px-4 pb-4 text-[11px] text-gray-500 whitespace-pre-wrap leading-relaxed border-t border-gray-800 pt-3 font-mono">
+                          {generatedPrompt}
+                        </pre>
+                      )}
+                    </div>
+                  )}
+
+                  {customMode && customPrompt && (
+                    <div className="bg-blue-950/20 border border-blue-800/30 rounded-xl p-3">
+                      <div className="text-[11px] text-blue-400 font-semibold mb-1">Custom prompt ready</div>
+                      <div className="text-[11px] text-blue-300/60">{customPrompt.split("\n").length} lines · {customPrompt.length} characters</div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Register button */}
@@ -573,14 +639,14 @@ export default function AgentsPage() {
 
                 <button
                   onClick={wallet ? handleRegister : openModal}
-                  disabled={registering || (!!wallet && !agentName.trim())}
+                  disabled={registering || (!!wallet && (!agentName.trim() || (customMode && !customPrompt.trim())))}
                   className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-all text-sm"
                   style={{ boxShadow: "0 0 20px rgba(139,92,246,0.25)" }}
                 >
-                  {registering ? "Registering..." : wallet ? `Register ${agentName || "Agent"}` : "Connect Wallet to Register"}
+                  {registering ? "Processing..." : wallet ? `Register ${agentName || "Agent"} — 1,000 XSEN` : "Connect Wallet to Register"}
                 </button>
                 <p className="text-[11px] text-gray-700 text-center">
-                  Free to register · No stake required · Agent name must be unique
+                  1,000 XSEN registration fee · Name must be unique · Earn 3% creator rewards
                 </p>
               </div>
             </div>
