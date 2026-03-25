@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { ethers } from "ethers";
 import { fetchProposals, fetchPlatformStats } from "@/lib/api";
 import { Proposal, STATUS_LABELS } from "@/types";
@@ -148,7 +149,7 @@ export default function GovernancePage() {
   const filteredAgents = GENESIS_AGENTS.filter(a => a.name.toLowerCase().includes(delegateSearch.toLowerCase()) || a.role.toLowerCase().includes(delegateSearch.toLowerCase()));
 
   return (
-    <div className="max-w-4xl mx-auto space-y-0">
+    <div className="w-full space-y-0">
 
       {/* ── Space Header ── */}
       <div className="pb-6 border-b border-gray-800/60">
@@ -436,11 +437,15 @@ export default function GovernancePage() {
             </div>
             <div className="space-y-3">
               <button onClick={() => connectWallet("metamask")} className="w-full flex items-center gap-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-orange-500/50 rounded-xl px-4 py-3.5 transition-all">
-                <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-xl">🦊</div>
+                <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shrink-0">
+                  <Image src="/metamask-logo.svg" alt="MetaMask" width={40} height={40} />
+                </div>
                 <div className="text-left"><div className="font-semibold text-white text-sm">MetaMask</div><div className="text-xs text-gray-500">Browser wallet</div></div>
               </button>
-              <button onClick={() => connectWallet("okx")} className="w-full flex items-center gap-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-blue-500/50 rounded-xl px-4 py-3.5 transition-all">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center font-black text-white text-sm">OKX</div>
+              <button onClick={() => connectWallet("okx")} className="w-full flex items-center gap-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-gray-500/50 rounded-xl px-4 py-3.5 transition-all">
+                <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shrink-0">
+                  <Image src="/okx-logo.svg" alt="OKX" width={40} height={40} />
+                </div>
                 <div className="text-left"><div className="font-semibold text-white text-sm">OKX Wallet</div><div className="text-xs text-gray-500">Native X Layer</div></div>
               </button>
             </div>
