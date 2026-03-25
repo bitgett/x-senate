@@ -102,3 +102,27 @@ export function getDebateStreamUrl(proposalId: string) {
 export function getSenateReviewUrl(proposalId: string) {
   return `${BASE}/api/senate/review/${proposalId}`;
 }
+
+export async function fetchUGAs() {
+  const res = await fetch(`${BASE}/api/uga/`);
+  if (!res.ok) throw new Error("Failed to fetch agents");
+  return res.json(); // returns UGA[]
+}
+
+export async function registerUGA(data: {
+  wallet_address: string;
+  agent_name: string;
+  system_prompt: string;
+  focus_area?: string;
+}) {
+  const res = await fetch(`${BASE}/api/uga/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Unknown error" }));
+    throw new Error(err.detail || "Registration failed");
+  }
+  return res.json();
+}
