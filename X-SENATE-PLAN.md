@@ -203,7 +203,7 @@ When a proposal is registered, the governor calls `snapshotForProposal()` on the
 | `/agents` | AI Agent Hub — Browse Genesis 5 + Create agents + My Agent + Avatar Upload | ✅ Complete |
 | `/leaderboard` | 3-tab podium ranking (Agents / Stakers / Governance) with animations | ✅ Complete |
 | `/projects` | Multi-tenant registry — project list + registration | ✅ Complete |
-| `/onchain` | OKX OnchainOS market data, wallet portfolio | ✅ Complete |
+| `/onchain` | OKX OnchainOS market data, wallet portfolio *(content distributed to Sentinel/Stake)* | ✅ Complete |
 
 ---
 
@@ -224,7 +224,10 @@ When a proposal is registered, the governor calls `snapshotForProposal()` on the
 | `/api/execute/reflect/[id]` | POST | Post-vote reflection |
 | `/api/personas` | GET | Genesis 5 agent personas |
 | `/api/uga/` | GET | List community agents |
-| `/api/uga/register` | POST | Register custom agent |
+| `/api/uga/register` | POST | Register custom agent (x402: $10 XSEN gate) |
+| `/api/proposals/submit` | POST | Manual proposal — Sentinel AI gate (x402: $10 XSEN gate) |
+| `/api/x402/quote` | GET | Live XSEN price quote for payment UX |
+| `/api/x402/verify` | POST | On-chain receipt verification (ERC20 Transfer check) |
 | `/api/registry/projects` | GET, POST | Project list, register project |
 | `/api/registry/stats` | GET | Platform-wide statistics |
 | `/api/staking/leaderboard` | GET | Agent rankings |
@@ -264,6 +267,22 @@ When a proposal is registered, the governor calls `snapshotForProposal()` on the
 | **Leaderboard** | `/leaderboard` — 3-tab podium: Agents (VP), Stakers (XSEN tokens), Governance (score) |
 | **NavBar Leaderboard Link** | Trophy icon with gold shimmer sweep effect, leftmost position |
 | **Stake Stats Bar Fix** | Stats bar constrained inside `max-w-5xl mx-auto` to prevent edge overflow |
+| **Leaderboard SVG Icons** | Tabs use inline SVG icons (no emoji); medal/crown badges also SVG |
+| **Stakers Show Token Count** | Leaderboard Stakers tab displays actual XSEN token count, not VP |
+| **x402 Payments — Agent Creation** | `/api/uga/register` requires $10 USD in XSEN; price from OKX Market API |
+| **x402 Payments — Proposal Submit** | `/api/proposals/submit` requires $10 USD in XSEN payment gate |
+| **Live XSEN Price** | OKX Market API chainIndex=196 for real-time price; fallback $0.01 |
+| **XSEN/USDT Pool** | Uniswap X Layer pool created; OKX Market API indexes price |
+| **Treasury Wallet** | `0x8266...` collects all x402 XSEN payments |
+| **x402 Inline Verification** | RPC receipt check inlined in each route (no serverless-to-serverless hop) |
+| **RPC Timeout Fallback** | If X Layer RPC times out (8s), payment is trusted and operation proceeds |
+| **Sentinel Market Strip** | ETH price + gas prices shown as pill chips below Sentinel header |
+| **Stake Gas Display** | Live gas prices (normal/fast/rapid Gwei) shown below stake button |
+| **Stake Portfolio Tab** | My VP tab has X Layer Portfolio card via OKX Wallet API |
+| **/onchain Distributed** | /onchain page content distributed: ETH/gas → Sentinel, gas → Stake, portfolio → Stake My VP |
+| **NavBar Cleanup** | Removed /onchain link; Projects=05, Activity=06 numbering added |
+| **x402 Payment UI** | Agents page: Quote→Pay→Verify→Register step indicator with live XSEN price |
+| **x402 Proposal UI** | App page submit: Quote→Pay→Verify→AI Review step indicator |
 
 ---
 
@@ -275,14 +294,12 @@ When a proposal is registered, the governor calls `snapshotForProposal()` on the
 |---|---|
 | **Stake/Unstake TX** | Staking page reads contract data but write transactions need wallet signing |
 | **Project registration on-chain** | Registration form UI exists; XSEN approval + tx flow needed |
-| **OKX x402 Payments** | x402 payment protocol for platform fees not yet integrated |
 
 ### 🟢 Nice-to-Have (Post-Hackathon)
 
 | Item | Description |
 |---|---|
 | Mobile optimization | Current layout is desktop-first |
-| Real XSEN price feed | Token not yet listed; price shows "not listed" |
 | Auth boundary | Write routes are currently open — acceptable for demo |
 
 ---
@@ -293,8 +310,8 @@ When a proposal is registered, the governor calls `snapshotForProposal()` on the
 |---|---|
 | **X Layer Network** | Deployed on OKX's EVM L2 (chainId 196) |
 | **OKX Wallet** | Native wallet connection with auto chain switch |
-| **OKX Market API** | Real-time price data on /onchain page |
-| **OKX Wallet API** | Portfolio holdings, transaction history |
+| **OKX Market API** | Real-time XSEN price (chainIndex=196); ETH price on Sentinel |
+| **OKX Wallet API** | Portfolio holdings on Stake My VP tab |
 | **OKLink API** | On-chain staking history for wallet activity |
 
 ---
@@ -341,4 +358,4 @@ Any X Layer ERC20 project can register for 1,000 XSEN and immediately access the
 
 ---
 
-*Last updated: 2026-03-25 | Version: 0.5.0*
+*Last updated: 2026-03-25 | Version: 0.6.0*

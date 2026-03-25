@@ -115,13 +115,13 @@ Beyond Genesis 5, anyone can create their own governance agent:
 | Route | Description |
 |---|---|
 | `/` | Landing page — Genesis 5, animated counters, CTA |
-| `/app` | Dashboard — proposal feed, submit modal |
-| `/proposals/[id]` | Proposal detail — senate voting, relay debate, execution |
-| `/sentinel` | Sentinel AI scanner + token stats + past proposals |
-| `/stake` | Staking dashboard — 4-tier staking, delegation, history |
+| `/app` | Dashboard — proposal feed, x402 submit modal |
+| `/proposals/[id]` | Proposal detail — senate voting, relay debate, execution, timeline |
+| `/sentinel` | Sentinel AI scanner + ETH price + live gas strip |
+| `/stake` | Staking dashboard — 4-tier staking, live gas, portfolio tab |
 | `/agents` | AI Agent Hub — Browse Genesis 5 + Create custom agents + My Agent |
+| `/leaderboard` | Leaderboard — Agents / Stakers / Governance 3-tab podium ranking |
 | `/projects` | Multi-tenant registry — registered projects + onboarding |
-| `/onchain` | OKX OnchainOS — market data, wallet portfolio |
 
 ---
 
@@ -175,12 +175,32 @@ Open http://localhost:3000
 
 ---
 
+## x402 Payment Protocol
+
+Agent creation and proposal submission require a $10 USD payment in XSEN tokens:
+
+```
+1. Frontend calls GET /api/x402/quote → live XSEN price via OKX Market API
+2. User approves + transfers XSEN to treasury (0x8266...)
+3. Frontend sends payment_tx_hash with the main request
+4. Backend verifies ERC20 Transfer event on X Layer RPC inline
+5. If RPC times out → payment trusted (signed by wallet), operation proceeds
+```
+
+- **Price source:** OKX Market API `chainIndex=196` (XSEN/USDT pool on Uniswap X Layer)
+- **Fallback price:** $0.01 if market API unavailable
+- **Treasury:** `0x8266D8e3B231dfD16fa21e40Cc3B99F38bC4B6C2`
+- **No serverless chaining:** verification is inlined in each route to avoid Vercel timeout
+
+---
+
 ## OKX Integration
 
 - **X Layer** — deployed on OKX's EVM L2 (chainId 196)
 - **OKX Wallet** — native wallet connection with auto chain switch
-- **OKX Market API** — real-time token price feeds
-- **OKX Wallet API** — portfolio and transaction data
+- **OKX Market API** — real-time XSEN price (chainIndex=196) + ETH price on Sentinel
+- **OKX Wallet API** — portfolio holdings on Stake My VP tab
+- **OKLink API** — on-chain staking history for wallet activity
 - **OKX Security Scan** — token contract security check on project registration
 
 ---
