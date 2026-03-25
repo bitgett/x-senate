@@ -254,7 +254,7 @@ When a proposal is registered, the governor calls `snapshotForProposal()` on the
 | **Wallet Connect** | MetaMask + OKX Wallet with real logos, auto X Layer chain switch |
 | **Global Wallet State** | React Context (WalletContext) — connect once, works everywhere |
 | **Staking Dashboard** | Stargate-style hero — global stats + personal stats |
-| **7-day Unstake Cooldown** | Request → 7-day countdown → Complete (localStorage tracked) |
+| **Unstake** | Flexible tier: instant unstake; Lock tiers: 7-day cooldown (Request → countdown → Complete) |
 | **Staking History** | Transaction timestamps, amounts, via OKLink API |
 | **Sentinel Redesign** | Full-width, token price card, proposal stats, past proposals table |
 | **Custom Agent Builder** | Visual builder with sliders, auto system prompt, mock vote preview |
@@ -272,17 +272,28 @@ When a proposal is registered, the governor calls `snapshotForProposal()` on the
 | **x402 Payments — Agent Creation** | `/api/uga/register` requires $10 USD in XSEN; price from OKX Market API |
 | **x402 Payments — Proposal Submit** | `/api/proposals/submit` requires $10 USD in XSEN payment gate |
 | **Live XSEN Price** | OKX Market API chainIndex=196 for real-time price; fallback $0.01 |
-| **XSEN/USDT Pool** | Uniswap X Layer pool created; OKX Market API indexes price |
+| **XSEN/USDT Pool (V3/Algebra)** | On-chain pool `0xb524efba...` on X Layer; price read via `slot0()` sqrtPriceX96 |
+| **Pool Price Calculation** | V3/Algebra pool (not V2) — `getReserves()` reverts; use `slot0()` + sqrtPriceX96 math |
 | **Treasury Wallet** | `0x8266...` collects all x402 XSEN payments |
 | **x402 Inline Verification** | RPC receipt check inlined in each route (no serverless-to-serverless hop) |
-| **RPC Timeout Fallback** | If X Layer RPC times out (8s), payment is trusted and operation proceeds |
-| **Sentinel Market Strip** | ETH price + gas prices shown as pill chips below Sentinel header |
-| **Stake Gas Display** | Live gas prices (normal/fast/rapid Gwei) shown below stake button |
-| **Stake Portfolio Tab** | My VP tab has X Layer Portfolio card via OKX Wallet API |
-| **/onchain Distributed** | /onchain page content distributed: ETH/gas → Sentinel, gas → Stake, portfolio → Stake My VP |
+| **Payment Security** | `from_address` validated against Transfer log `topics[1]`; fail-open removed |
+| **Sentinel Market Strip** | XSEN price + gas prices shown as pill chips below Sentinel header |
+| **Status Normalization** | `normalizeStatus()` maps DB status strings (Draft/In_Senate/Rejected_Senate) to UI canonical keys |
+| **Stake Gas Display** | Live gas prices (normal/fast/rapid Gwei) from X Layer RPC `eth_gasPrice` |
+| **Stake Portfolio Tab** | My VP tab auto-loads X Layer Portfolio on wallet connect |
+| **OKX API Client** | `lib/okx.ts` — shared HMAC-SHA256 auth client for all OKX DEX v6 endpoints |
+| **OKX Balance API v6** | `/api/v6/dex/balance/all-token-balances-by-address` + `total-value-by-address` |
+| **OKX x402/verify** | `/api/v6/x402/verify` used as primary payment verifier; RPC as fallback |
+| **OKX Market Price (auth)** | Authenticated `GET /api/v6/dex/market/price` — top priority price source |
+| **Price Source Priority** | okx_market_v6_auth → okx_market_v6 → xlayer_pool → fallback |
+| **XSEN Token Logo** | Custom teal hexagon ring SVG; deployed to `/public/xsen-logo.svg` |
+| **/onchain Distributed** | /onchain page content distributed: price/gas → Sentinel, portfolio → Stake My VP |
 | **NavBar Cleanup** | Removed /onchain link; Projects=05, Activity=06 numbering added |
 | **x402 Payment UI** | Agents page: Quote→Pay→Verify→Register step indicator with live XSEN price |
 | **x402 Proposal UI** | App page submit: Quote→Pay→Verify→AI Review step indicator |
+| **DB Init Order Fix** | ALTER TABLE agent_votes moved after CREATE TABLE (was crashing fresh DB deployments) |
+| **Sentinel Timeout Fix** | `maxDuration=60`, Anthropic `timeout:25_000`, client `AbortSignal.timeout(55_000)` |
+| **Agents Page fmt() Fix** | Neon Postgres returns NUMERIC as strings; `fmt()` now coerces with `Number()` |
 
 ---
 

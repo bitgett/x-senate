@@ -13,13 +13,14 @@
 
 X-Senate is an AI-native governance layer built on X Layer. Instead of token holders manually reviewing and voting on proposals, five specialized AI agents — the **Genesis 5 Senate** — autonomously analyze, debate, and decide.
 
-Any project that has deployed an ERC20 token on X Layer can register on the platform (1,000 XSEN fee) and immediately access:
+Any project that has deployed an ERC20 token on X Layer can register on the platform and immediately access:
 - AI proposal scanning (Sentinel)
-- 5-agent senate review with live streaming
+- 5-agent senate review with live SSE streaming
 - Relay debate with sequential agent argumentation
 - On-chain proposal execution
 - 4-tier staking with Voting Power and creator incentives
 - **Custom AI Agent Builder** — anyone can create governance agents with a visual personality builder
+- **x402 Payment Protocol** — agent creation and proposal submission gated by XSEN micropayment
 
 ---
 
@@ -32,7 +33,7 @@ Any project that has deployed an ERC20 token on X Layer can register on the plat
 │  Next.js 16 (App Router)                │
 │  ├── /app           React UI (9 pages)  │
 │  ├── /app/api       Serverless API      │
-│  └── /lib           DB · AI · Web3      │
+│  └── /lib           DB · AI · OKX      │
 │                                         │
 │  Neon Postgres      proposals & votes   │
 │  Anthropic Claude   AI agent reasoning  │
@@ -95,16 +96,15 @@ Beyond Genesis 5, anyone can create their own governance agent:
 
 ## Staking
 
-| Tier | APY | VP Multiplier | Lock | PoP |
+| Tier | APY | VP Multiplier | Lock | Unstake |
 |---|---|---|---|---|
-| Flexible | 5% | 1.0x | None | Vote or delegate required |
-| Lock30 | 10% | 1.1x | 30 days | Auto |
-| Lock90 | 20% | 1.3x | 90 days | Auto |
-| Lock180 | 35% | 1.5x | 180 days | Auto |
+| Flexible | 5% | 1.0x | None | Instant |
+| Lock30 | 10% | 1.1x | 30 days | 7-day cooldown after lock expires |
+| Lock90 | 20% | 1.3x | 90 days | 7-day cooldown after lock expires |
+| Lock180 | 35% | 1.5x | 180 days | 7-day cooldown after lock expires |
 
 - Position-based: one wallet can hold multiple positions
 - Snapshot VP: agent voting power is locked at proposal creation (flash-stake proof)
-- **7-day unstake cooldown**: request unstake → 7-day wait → complete unstake
 - Staking history: full transaction record with timestamps
 - **User Agents**: register a custom AI agent and earn 3% creator reward from delegations
 
@@ -117,8 +117,8 @@ Beyond Genesis 5, anyone can create their own governance agent:
 | `/` | Landing page — Genesis 5, animated counters, CTA |
 | `/app` | Dashboard — proposal feed, x402 submit modal |
 | `/proposals/[id]` | Proposal detail — senate voting, relay debate, execution, timeline |
-| `/sentinel` | Sentinel AI scanner + ETH price + live gas strip |
-| `/stake` | Staking dashboard — 4-tier staking, live gas, portfolio tab |
+| `/sentinel` | Sentinel AI scanner + XSEN price + live gas strip |
+| `/stake` | Staking dashboard — 4-tier staking, OKX portfolio, auto-load on connect |
 | `/agents` | AI Agent Hub — Browse Genesis 5 + Create custom agents + My Agent |
 | `/leaderboard` | Leaderboard — Agents / Stakers / Governance 3-tab podium ranking |
 | `/projects` | Multi-tenant registry — registered projects + onboarding |
@@ -143,6 +143,8 @@ Result: dedicated staking contract + access to Genesis 5 senate
 | XSenateStaking | `0x9CD9eF69c4EE176c8115E4BCf6c604Eb46599502` |
 | XSenateGovernor | `0xa140f36Cc529e6487b877547A543213aD2ae39dF` |
 | XSenateRegistry | `0xFd11e955CCEA6346911F33119B3bf84b3f0E6678` |
+| XSEN/USDT Pool | `0xb524efba890ed7087a4188b9b0148eb7fb954da9` (V3/Algebra) |
+| Treasury | `0x8266D8e3B231dfD16fa21e40Cc3B99F38bC4B6C2` |
 
 ---
 
@@ -151,7 +153,7 @@ Result: dedicated staking contract + access to Genesis 5 senate
 | Layer | Technology |
 |---|---|
 | Frontend | Next.js 16, React 19, Tailwind CSS |
-| API | Next.js Serverless Functions |
+| API | Next.js Serverless Functions (Vercel) |
 | Database | Neon Postgres |
 | AI | Anthropic Claude (claude-sonnet-4-6) |
 | Blockchain | X Layer (OKX L2, chainId 196) |
@@ -161,17 +163,32 @@ Result: dedicated staking contract + access to Genesis 5 senate
 
 ---
 
-## Local Development
+## OKX OnchainOS Integration
 
-```bash
-cd frontend
-npm install
-cp .env.local.example .env.local
-# Add ANTHROPIC_API_KEY and DATABASE_URL
-npm run dev
+`frontend/lib/okx.ts` — shared authenticated OKX API client (HMAC-SHA256)
+
+| OKX API Endpoint | Used For |
+|---|---|
+| `POST /api/v6/dex/market/price` | XSEN live price (authenticated) |
+| `GET /api/v6/dex/balance/all-token-balances-by-address` | Wallet portfolio tokens |
+| `GET /api/v6/dex/balance/total-value-by-address` | Wallet total USD value |
+| `POST /api/v6/x402/verify` | Payment verification (primary) |
+| `GET /api/v6/dex/post-transaction/transaction-detail-by-txhash` | TX detail lookup |
+| `GET /api/v6/dex/market/candles` | XSEN price candles |
+| `GET /api/v6/dex/market/token/basic-info` | Token metadata |
+| `GET /api/v6/pre-transaction/gas-price` | (RPC direct used instead — X Layer not indexed) |
+
+**Price source priority:**
+```
+1. OKX Market API v6 (authenticated) → okx_market_v6_auth
+2. OKX Market API v6 (unauthenticated) → okx_market_v6
+3. On-chain V3 pool slot0() via X Layer RPC → xlayer_pool
+4. Hardcoded fallback $0.01 → fallback
 ```
 
-Open http://localhost:3000
+**XSEN Pool:** Uniswap V3/Algebra style pool on X Layer
+Pool reads `sqrtPriceX96` from `slot0()` → computes USD price
+Current live price: ~$10.34 per XSEN
 
 ---
 
@@ -180,28 +197,36 @@ Open http://localhost:3000
 Agent creation and proposal submission require a $10 USD payment in XSEN tokens:
 
 ```
-1. Frontend calls GET /api/x402/quote → live XSEN price via OKX Market API
+1. Frontend calls GET /api/x402/quote → live XSEN price (OKX API → pool → fallback)
 2. User approves + transfers XSEN to treasury (0x8266...)
 3. Frontend sends payment_tx_hash with the main request
-4. Backend verifies ERC20 Transfer event on X Layer RPC inline
-5. If RPC times out → payment trusted (signed by wallet), operation proceeds
+4. Backend calls POST /api/v6/x402/verify (OKX OnchainOS) as primary verifier
+5. Falls back to direct X Layer RPC receipt verification if OKX unavailable
 ```
 
-- **Price source:** OKX Market API `chainIndex=196` (XSEN/USDT pool on Uniswap X Layer)
-- **Fallback price:** $0.01 if market API unavailable
-- **Treasury:** `0x8266D8e3B231dfD16fa21e40Cc3B99F38bC4B6C2`
-- **No serverless chaining:** verification is inlined in each route to avoid Vercel timeout
+- **No serverless chaining:** verification inlined in each route (avoids Vercel timeout)
+- **Vercel maxDuration = 60:** extended timeout for Claude API calls
+- **Anthropic timeout = 25s:** hard limit on AI calls
+- **Client AbortSignal = 55s:** client-side fetch timeout
 
 ---
 
-## OKX Integration
+## Local Development
 
-- **X Layer** — deployed on OKX's EVM L2 (chainId 196)
-- **OKX Wallet** — native wallet connection with auto chain switch
-- **OKX Market API** — real-time XSEN price (chainIndex=196) + ETH price on Sentinel
-- **OKX Wallet API** — portfolio holdings on Stake My VP tab
-- **OKLink API** — on-chain staking history for wallet activity
-- **OKX Security Scan** — token contract security check on project registration
+```bash
+cd frontend
+npm install
+cp .env.local.example .env.local
+# Required:
+#   ANTHROPIC_API_KEY=...
+#   DATABASE_URL=...         (Neon Postgres)
+#   OKX_API_KEY=...          (OKX OnchainOS)
+#   OKX_SECRET_KEY=...
+#   OKX_PASSPHRASE=...
+npm run dev
+```
+
+Open http://localhost:3000
 
 ---
 

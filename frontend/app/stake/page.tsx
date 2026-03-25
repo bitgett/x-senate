@@ -638,7 +638,16 @@ export default function StakePage() {
                             {/* Unstake button / cooldown state */}
                             {p.active && !locked && (
                               <div className="mt-3">
-                                {inCooldown ? (
+                                {Number(p.tier) === 0 ? (
+                                  /* Flexible: instant unstake, no cooldown */
+                                  <button
+                                    onClick={() => completeUnstake(p.id)}
+                                    disabled={unstaking === p.id}
+                                    className="w-full text-xs font-semibold bg-red-900/20 hover:bg-red-900/30 disabled:opacity-40 border border-red-700/40 text-red-300 py-2 rounded-lg transition-colors"
+                                  >
+                                    {unstaking === p.id ? "Unstaking..." : "Unstake"}
+                                  </button>
+                                ) : inCooldown ? (
                                   <div className="text-center border border-yellow-700/40 bg-yellow-900/10 rounded-lg py-2">
                                     <div className="text-xs text-yellow-400 font-semibold">Cooldown: {fmtCountdown(remaining)}</div>
                                     <div className="text-[10px] text-gray-600 mt-0.5">Unstake available after 7 days</div>
