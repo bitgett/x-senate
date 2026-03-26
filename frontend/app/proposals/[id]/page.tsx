@@ -201,7 +201,8 @@ export default function ProposalDetail() {
   if (!proposal) return <div className="text-red-400 py-12 text-center text-sm">Proposal not found</div>;
 
   const status = STATUS_LABELS[proposal.status];
-  const oneLiners = proposal.one_liner_opinions ? JSON.parse(proposal.one_liner_opinions) : null;
+  let oneLiners: Record<string, string> | null = null;
+  try { oneLiners = proposal.one_liner_opinions ? JSON.parse(proposal.one_liner_opinions) : null; } catch { oneLiners = null; }
   const currentIdx = allProposals.findIndex(p => p.id === id);
   const prevProposal = currentIdx > 0 ? allProposals[currentIdx - 1] : null;
   const nextProposal = currentIdx < allProposals.length - 1 ? allProposals[currentIdx + 1] : null;

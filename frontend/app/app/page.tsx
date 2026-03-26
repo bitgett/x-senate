@@ -9,7 +9,7 @@ import { useWallet } from "@/contexts/WalletContext";
 const STAKING_ADDRESS = process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS ?? "0x9CD9eF69c4EE176c8115E4BCf6c604Eb46599502";
 const STAKING_ABI = [
   "function getEffectiveVP(address user) view returns (uint256)",
-  "function getPositions(address user) view returns (tuple(uint256 id, uint256 amount, uint8 tier, uint256 lockEnd, string delegatedAgent, bool active, uint256 accReward)[])",
+  "function getUserPositions(address user) view returns (tuple(uint256 id, address owner, uint256 amount, uint8 tier, uint256 lockEnd, uint256 stakedAt, uint256 lastRewardAt, uint256 accReward, string delegatedAgent, bool active)[])",
   "function delegatePosition(uint256 positionId, string agentName) external",
 ];
 
@@ -93,7 +93,7 @@ export default function GovernancePage() {
       const raw = rawProvider();
       const provider = new ethers.BrowserProvider(raw);
       const staking = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, provider);
-      const pos = await staking.getPositions(wallet).catch(() => []);
+      const pos = await staking.getUserPositions(wallet).catch(() => []);
       const parsed = pos.map((p: any) => ({
         id: Number(p.id), amount: Number(ethers.formatEther(p.amount)),
         active: p.active, delegatedAgent: p.delegatedAgent,

@@ -282,15 +282,20 @@ export default function LeaderboardPage() {
         byProposer[k].proposals++;
       }
     });
-    const entries = Object.values(byProposer).map((e: any) => ({
-      name: `${e.wallet.slice(0, 8)}...${e.wallet.slice(-4)}`,
-      wallet: e.wallet,
-      proposals: e.proposals,
-      votes: Math.floor(Math.random() * 20 + 5),  // demo
-      delegations: Math.floor(Math.random() * 100_000),
-      score: e.proposals * 300 + 150 + Math.floor(Math.random() * 200),
-      details: `${e.proposals} proposal${e.proposals !== 1 ? "s" : ""}`,
-    }));
+    const entries = Object.values(byProposer).map((e: any) => {
+      const seed = (s: string) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i); return Math.abs(h); };
+      const votes = seed(e.wallet + "v") % 20 + 5;
+      const delegations = seed(e.wallet + "d") % 100_000;
+      return {
+        name: `${e.wallet.slice(0, 8)}...${e.wallet.slice(-4)}`,
+        wallet: e.wallet,
+        proposals: e.proposals,
+        votes,
+        delegations,
+        score: e.proposals * 300 + votes * 10 + 150,
+        details: `${e.proposals} proposal${e.proposals !== 1 ? "s" : ""}`,
+      };
+    });
     // Add mock contributors for demo if empty
     if (entries.length < 3) {
       entries.push(

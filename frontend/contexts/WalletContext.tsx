@@ -18,6 +18,7 @@ export interface WalletCtx {
   walletType: "metamask" | "okx" | null;
   effectiveVP: number;
   connecting: boolean;
+  connectError: string | null;
   showModal: boolean;
   openModal: () => void;
   closeModal: () => void;
@@ -34,6 +35,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [walletType, setWalletType] = useState<"metamask" | "okx" | null>(null);
   const [effectiveVP, setVP] = useState(0);
   const [connecting, setConnecting] = useState(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
 
   const fetchVP = useCallback(async (address: string, type: "metamask" | "okx") => {
@@ -61,6 +63,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   async function connect(type: "metamask" | "okx") {
     setShowModal(false);
+    setConnectError(null);
     const raw = type === "okx" ? (window as any).okxwallet : (window as any).ethereum;
     if (!raw) {
       alert(type === "okx" ? "OKX Wallet not found. Install from okx.com/web3" : "MetaMask not found.");
@@ -79,8 +82,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setWalletType(type);
       localStorage.setItem(LS_KEY, JSON.stringify({ address: addr, type }));
       await fetchVP(addr, type);
-    } catch (e) {
-      console.error("Wallet connect error:", e);
+    } catch (e: any) {
+      const msg = e?.code === 4001 ? "연결이 거부되었습니다." : "지갑 연결에 실패했습니다. 다시 시도해주세요.";
+      setConnectError(msg);
     }
     setConnecting(false);
   }
@@ -102,9 +106,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   return (
     <WalletContext.Provider value={{
-      wallet, walletType, effectiveVP, connecting,
+      wallet, walletType, effectiveVP, connecting, connectError,
       showModal,
-      openModal: () => setShowModal(true),
+      openModal: () => { setShowModal(true); setConnectError(null); },
       closeModal: () => setShowModal(false),
       connect, disconnect, rawProvider, refreshVP,
     }}>

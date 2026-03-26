@@ -4,7 +4,7 @@ import { ReactNode } from "react";
 import { WalletProvider, useWallet } from "@/contexts/WalletContext";
 
 function WalletModal() {
-  const { showModal, closeModal, connect } = useWallet();
+  const { showModal, closeModal, connect, connectError, connecting } = useWallet();
   if (!showModal) return null;
   return (
     <div
@@ -18,11 +18,15 @@ function WalletModal() {
         <div className="text-center mb-5">
           <h3 className="text-lg font-bold text-white">Connect Wallet</h3>
           <p className="text-xs text-gray-500 mt-1">Connect to X Layer Mainnet (chainId 196)</p>
+          {connectError && (
+            <p className="text-xs text-red-400 mt-2 bg-red-900/20 border border-red-700/30 rounded-lg px-3 py-1.5">{connectError}</p>
+          )}
         </div>
         <div className="space-y-3">
           <button
             onClick={() => connect("metamask")}
-            className="w-full flex items-center gap-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-orange-500/50 rounded-xl px-4 py-3.5 transition-all"
+            disabled={connecting}
+            className="w-full flex items-center gap-4 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 border border-gray-700 hover:border-orange-500/50 rounded-xl px-4 py-3.5 transition-all"
           >
             <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0">
               <Image src="/metamask-logo.svg" alt="MetaMask" width={40} height={40} />
@@ -34,7 +38,8 @@ function WalletModal() {
           </button>
           <button
             onClick={() => connect("okx")}
-            className="w-full flex items-center gap-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-gray-500/50 rounded-xl px-4 py-3.5 transition-all"
+            disabled={connecting}
+            className="w-full flex items-center gap-4 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 border border-gray-700 hover:border-gray-500/50 rounded-xl px-4 py-3.5 transition-all"
           >
             <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0">
               <Image src="/okx-logo.svg" alt="OKX" width={40} height={40} />
