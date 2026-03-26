@@ -243,8 +243,8 @@ export default function LeaderboardPage() {
 
   // Merge Genesis + UGA into one ranked agent list
   const allAgents = (() => {
-    const genesis = agents.map((a: any) => ({ ...a, is_genesis: true }));
-    const uga = ugaAgents.map((u: any, i: number) => ({
+    const genesis = agents.filter((a: any) => a.agent_name && a.agent_name.trim().length >= 3).map((a: any) => ({ ...a, is_genesis: true }));
+    const uga = ugaAgents.filter((u: any) => u.agent_name && u.agent_name.trim().length >= 3).map((u: any, i: number) => ({
       rank: genesis.length + i + 1,
       agent_name: u.agent_name,
       focus_area: u.focus_area,
