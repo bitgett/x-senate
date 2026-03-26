@@ -549,4 +549,13 @@ Used for: Genesis 5 senate voting (parallel SSE), Relay debate (sequential), Sen
 
 ---
 
+---
+
+## Further Reading
+
+- [PHILOSOPHY.md](./PHILOSOPHY.md) — Design thinking, governance philosophy, and why we built X-Senate this way
+- [TEAM.md](./TEAM.md) — Team QuackAI, build log, and contacts
+
+---
+
 *Built for the OKX × X Layer OnchainOS AI Hackathon 2026 by Team QuackAI*
