@@ -19,6 +19,28 @@ const TOKEN_ABI = [
   "function approve(address spender, uint256 amount) external returns (bool)",
 ];
 
+const STAKING_IFACE = new ethers.Interface(STAKING_ABI);
+const TOKEN_IFACE   = new ethers.Interface(TOKEN_ABI);
+const RPC_PROVIDER  = new ethers.JsonRpcProvider("https://rpc.xlayer.tech");
+
+// Send a transaction via raw EIP-1193 (no BrowserProvider = no ENS lookup)
+async function sendTx(rawProv: any, from: string, to: string, data: string): Promise<string> {
+  return await rawProv.request({
+    method: "eth_sendTransaction",
+    params: [{ from, to, data }],
+  });
+}
+
+// Poll receipt via JsonRpcProvider
+async function waitTx(hash: string): Promise<void> {
+  for (let i = 0; i < 60; i++) {
+    const receipt = await RPC_PROVIDER.getTransactionReceipt(hash).catch(() => null);
+    if (receipt) return;
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  throw new Error("Transaction not confirmed after 2 minutes");
+}
+
 const TIER_INFO = [
   { id: 0, name: "Flexible", days: 0,   apy: 5,  mult: 1.0, color: "border-gray-700 bg-gray-900/50",        badge: "bg-gray-700 text-gray-300" },
   { id: 1, name: "Lock30",   days: 30,  apy: 10, mult: 1.1, color: "border-blue-700/50 bg-blue-950/30",      badge: "bg-blue-800 text-blue-200" },
@@ -199,17 +221,16 @@ export default function StakePage() {
     setStaking(true);
     setTxStatus(null);
     try {
-      const provider = new ethers.BrowserProvider(rawProvider(), { chainId: 196, name: "xlayer" });
-      const signer = await provider.getSigner();
-      const token = new ethers.Contract(TOKEN_ADDRESS,   TOKEN_ABI,   signer);
-      const stk   = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
+      const raw = rawProvider();
       const amt = ethers.parseEther(stakeAmount);
       setTxStatus("Approving XSEN...");
-      const approveTx = await token.approve(STAKING_ADDRESS, amt);
-      await approveTx.wait();
+      const approveTxHash = await sendTx(raw, wallet, TOKEN_ADDRESS,
+        TOKEN_IFACE.encodeFunctionData("approve", [STAKING_ADDRESS, amt]));
+      await waitTx(approveTxHash);
       setTxStatus("Staking...");
-      const tx = await stk.stake(amt, selectedTier);
-      await tx.wait();
+      const stakeTxHash = await sendTx(raw, wallet, STAKING_ADDRESS,
+        STAKING_IFACE.encodeFunctionData("stake", [amt, selectedTier]));
+      await waitTx(stakeTxHash);
       setTxStatus(`✓ Staked ${stakeAmount} XSEN in ${TIER_INFO[selectedTier].name}`);
       setStakeAmount("");
       await loadWalletData();
@@ -226,12 +247,10 @@ export default function StakePage() {
     setUnstaking(posId);
     setTxStatus(null);
     try {
-      const provider = new ethers.BrowserProvider(rawProvider(), { chainId: 196, name: "xlayer" });
-      const signer = await provider.getSigner();
-      const stk = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
-      const tx = await stk.unstake(posId);
       setTxStatus("Unstaking...");
-      await tx.wait();
+      const txHash = await sendTx(rawProvider(), wallet, STAKING_ADDRESS,
+        STAKING_IFACE.encodeFunctionData("unstake", [posId]));
+      await waitTx(txHash);
       clearCooldown(wallet, posId);
       setTxStatus("✓ Unstaked successfully");
       await loadWalletData();
@@ -249,12 +268,10 @@ export default function StakePage() {
     setDelegating(agentName);
     setTxStatus(null);
     try {
-      const provider = new ethers.BrowserProvider(rawProvider(), { chainId: 196, name: "xlayer" });
-      const signer = await provider.getSigner();
-      const stk = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
-      const tx = await stk.delegatePosition(activePos.id, agentName);
       setTxStatus(`Delegating to ${agentName}...`);
-      await tx.wait();
+      const txHash = await sendTx(rawProvider(), wallet, STAKING_ADDRESS,
+        STAKING_IFACE.encodeFunctionData("delegatePosition", [activePos.id, agentName]));
+      await waitTx(txHash);
       setTxStatus(`✓ Delegated to ${agentName}`);
       await loadWalletData();
     } catch (e: any) {
@@ -295,12 +312,10 @@ export default function StakePage() {
                     onClick={async () => {
                       if (!wallet) return;
                       try {
-                        const provider = new ethers.BrowserProvider(rawProvider(), { chainId: 196, name: "xlayer" });
-                        const signer = await provider.getSigner();
-                        const stk = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
-                        const tx = await stk.claimAllRewards();
                         setTxStatus("Claiming...");
-                        await tx.wait();
+                        const txHash = await sendTx(rawProvider(), wallet, STAKING_ADDRESS,
+                          STAKING_IFACE.encodeFunctionData("claimAllRewards", []));
+                        await waitTx(txHash);
                         setTxStatus("✓ Claimed!");
                         await loadWalletData();
                         await refreshVP();
@@ -567,12 +582,10 @@ export default function StakePage() {
                     onClick={async () => {
                       if (!wallet) return;
                       try {
-                        const provider = new ethers.BrowserProvider(rawProvider(), { chainId: 196, name: "xlayer" });
-                        const signer = await provider.getSigner();
-                        const stk = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
-                        const tx = await stk.claimAllRewards();
                         setTxStatus("Claiming...");
-                        await tx.wait();
+                        const txHash = await sendTx(rawProvider(), wallet, STAKING_ADDRESS,
+                          STAKING_IFACE.encodeFunctionData("claimAllRewards", []));
+                        await waitTx(txHash);
                         setTxStatus("✓ Claimed!");
                         await loadWalletData();
                         await refreshVP();

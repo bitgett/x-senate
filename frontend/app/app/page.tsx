@@ -12,6 +12,19 @@ const STAKING_ABI = [
   "function getUserPositions(address user) view returns (tuple(uint256 id, address owner, uint256 amount, uint8 tier, uint256 lockEnd, uint256 stakedAt, uint256 lastRewardAt, uint256 accReward, string delegatedAgent, bool active)[])",
   "function delegatePosition(uint256 positionId, string agentName) external",
 ];
+const STAKING_IFACE = new ethers.Interface(STAKING_ABI);
+const RPC_PROVIDER  = new ethers.JsonRpcProvider("https://rpc.xlayer.tech");
+async function sendTx(rawProv: any, from: string, to: string, data: string): Promise<string> {
+  return await rawProv.request({ method: "eth_sendTransaction", params: [{ from, to, data }] });
+}
+async function waitTx(hash: string): Promise<void> {
+  for (let i = 0; i < 60; i++) {
+    const r = await RPC_PROVIDER.getTransactionReceipt(hash).catch(() => null);
+    if (r) return;
+    await new Promise(res => setTimeout(res, 2000));
+  }
+  throw new Error("Transaction not confirmed after 2 minutes");
+}
 
 const GENESIS_AGENTS = [
   { name: "Guardian",  role: "Strict Guardian",       accent: "#3b82f6", statement: "Votes only when proposals maintain network security and protect against systemic risks. Safety first, always." },
@@ -113,12 +126,10 @@ export default function GovernancePage() {
     setDelegating(agentName);
     setTxStatus(null);
     try {
-      const provider = new ethers.BrowserProvider(rawProvider(), { chainId: 196, name: "xlayer" });
-      const signer = await provider.getSigner();
-      const staking = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
-      const tx = await staking.delegatePosition(activePos.id, agentName);
       setTxStatus(`Delegating to ${agentName}...`);
-      await tx.wait();
+      const txHash = await sendTx(rawProvider(), wallet, STAKING_ADDRESS,
+        STAKING_IFACE.encodeFunctionData("delegatePosition", [activePos.id, agentName]));
+      await waitTx(txHash);
       setDelegate(agentName);
       setTxStatus(`✓ Delegated to ${agentName}`);
       await loadPositions();
