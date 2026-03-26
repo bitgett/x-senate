@@ -157,7 +157,7 @@ export async function POST(req: NextRequest) {
       discord:       discord?.trim() || null,
       telegram:      telegram?.trim() || null,
       registrant:    registrant?.trim() || null,
-      tx_hash:       settle.txHash ?? null,
+      tx_hash:       settle.txHash ?? undefined,
       logo_base64:   logo_base64 || null,
     });
 
