@@ -231,4 +231,47 @@ Open http://localhost:3000
 
 ---
 
+---
+
+## Hackathon Submission — OKX × X Layer OnchainOS AI Hackathon 2026
+
+### OnchainOS Capabilities Used
+
+| Capability | How Used |
+|---|---|
+| **Market API** | Live XSEN price (`POST /api/v6/dex/market/price` authenticated), candles, token metadata — Sentinel scanner, x402 quote, staking dashboard |
+| **Wallet API** | Portfolio token balances + total USD value per wallet — displayed on Stake page |
+| **x402 Payments** | XSEN micropayment gate for agent registration and proposal submission. Quote → on-chain transfer → OKX `POST /api/v6/x402/verify` (falls back to X Layer RPC receipt) |
+| **DApp Wallet Connect** | MetaMask + OKX Wallet connect to X Layer Mainnet (chainId 196). Auto-switch/add network via `wallet_switchEthereumChain` / `wallet_addEthereumChain` |
+
+### AI Model & Version
+
+**Anthropic Claude — `claude-sonnet-4-6`**
+
+Used for: Genesis 5 senate voting (parallel SSE streaming), Relay debate (sequential argumentation), Sentinel proposal scanner, post-vote reflection.
+
+### Prompt Design Overview *(600-char form answer)*
+
+> X-Senate uses 5 specialized governance personas (Guardian, Merchant, Architect, Diplomat, Populist), each with a distinct system prompt: mandate, decision style (conservative→progressive slider), and 4-dimensional voting weights (Security, Economics, Community, Technical summing to 100%). Community agents use a visual builder to generate prompts in the same schema. All agents respond in structured JSON: `{"vote","reason","chain_of_thought","confidence"}`. Relay debate injects prior agent arguments as context to build sequential reasoning chains.
+
+### Genesis 5 Persona Breakdown
+
+| Agent | Mandate | Style | Top Weight |
+|---|---|---|---|
+| 🛡️ Guardian | Protocol security & constitutional integrity | Conservative | Security 50% |
+| 💰 Merchant | Revenue, TVL, capital efficiency | Aggressive | ROI/Revenue 60% |
+| ⚙️ Architect | Technical feasibility, scalability | Pragmatic | Feasibility 40% |
+| 🤝 Diplomat | Ecosystem partnerships, reputation | Measured | Ecosystem 40% |
+| 👥 Populist | Small holders, community fairness | Egalitarian | Community 50% |
+
+### What Makes X-Senate Different
+
+1. **AI agents are the voters** — humans delegate VP to agents that vote autonomously, not just a voting UI
+2. **Multi-tenant** — any X Layer ERC20 gets the full governance stack by registering once
+3. **Relay Debate** — sequential argumentation where each agent reads and responds to prior agents, creating emergent consensus
+4. **x402 as economic moat** — spam-resistant governance via real-money proposal submission and agent creation
+5. **Community extensibility** — anyone can create and monetize a governance agent (3% creator reward on delegated votes)
+
+---
+
 *Built for the OKX × X Layer OnchainOS AI Hackathon 2026 by Team QuackAI*

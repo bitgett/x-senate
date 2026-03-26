@@ -552,8 +552,9 @@ export default function AgentsPage() {
                     <p className="text-xs text-gray-500 mt-0.5">Design your AI agent's personality and governance focus</p>
                   </div>
                   <div className="shrink-0 flex items-center gap-1.5 bg-yellow-900/20 border border-yellow-700/40 rounded-full px-3 py-1.5">
-                    <span className="text-yellow-400 text-xs font-bold">1,000 XSEN</span>
-                    <span className="text-yellow-600 text-[11px]">registration fee</span>
+                    <span className="text-yellow-400 text-xs">⚡</span>
+                    <span className="text-yellow-400 text-xs font-bold">~$10</span>
+                    <span className="text-yellow-600 text-[11px]">in XSEN</span>
                   </div>
                 </div>
               </div>
@@ -849,10 +850,10 @@ export default function AgentsPage() {
                     : payStep === "paying"     ? "Confirm XSEN payment in wallet..."
                     : payStep === "verifying"  ? "Verifying payment on-chain..."
                     : "Registering agent..."
-                    : wallet ? `Pay & Register ${agentName || "Agent"} — ~$10 in XSEN` : "Connect Wallet to Register"}
+                    : wallet ? `Deploy ${agentName || "Agent"} to X-Senate — ~$10 in XSEN` : "Connect Wallet to Register"}
                 </button>
                 <p className="text-[11px] text-gray-700 text-center">
-                  1,000 XSEN registration fee · Name must be unique · Earn 3% creator rewards
+                  One-time ~$10 fee in XSEN · Name must be unique · Earn 3% creator rewards on delegations
                 </p>
               </div>
             </div>
