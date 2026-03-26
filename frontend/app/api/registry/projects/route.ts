@@ -1,32 +1,58 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRegistryProjects } from "@/lib/contract";
+import { dbUpsertProjectMeta, dbListProjectsMeta, initSchema } from "@/lib/db";
 
-// Mock project data for demo when contract isn't deployed
-const MOCK_PROJECTS = [
-  {
-    project_id: "XSEN",
-    name: "X-Senate",
-    token_address: process.env.XSEN_TOKEN_ADDRESS ?? "0x0000000000000000000000000000000000000000",
-    staking_contract: process.env.XSEN_STAKING_ADDRESS ?? "0x0000000000000000000000000000000000000000",
-    registrant: "0x0000000000000000000000000000000000000000",
-    registered_at: Math.floor(Date.now() / 1000) - 86400,
-    active: true,
-  },
-];
+const XSEN_PROJECT = {
+  project_id: "XSEN",
+  name: "X-Senate",
+  description: "The native X-Senate governance token and DAO platform on X Layer.",
+  token_address: process.env.NEXT_PUBLIC_XSEN_TOKEN_ADDRESS ?? "0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b",
+  staking_contract: process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS ?? "0x9CD9eF69c4EE176c8115E4BCf6c604Eb46599502",
+  registrant: "0x8266D8e3B231dfD16fa21e40Cc3B99F38bC4B6C2",
+  registered_at: 0,
+  active: true,
+  twitter: "https://twitter.com/xsenate",
+  discord: null,
+  telegram: null,
+};
 
 export async function GET() {
   try {
-    const onchain = await getRegistryProjects();
-    if (onchain.length > 0) {
-      return NextResponse.json({ projects: onchain, count: onchain.length, platform: "X-Senate AI Governance Platform" });
+    await initSchema().catch(() => {});
+
+    // Merge on-chain projects with DB social meta
+    const [onchain, metaRows] = await Promise.all([
+      getRegistryProjects().catch(() => []),
+      dbListProjectsMeta().catch(() => []),
+    ]);
+
+    const metaMap = Object.fromEntries(metaRows.map(m => [m.project_id, m]));
+
+    let projects: any[] = onchain.length > 0
+      ? onchain.map((p: any) => ({ ...p, ...(metaMap[p.project_id] ?? {}) }))
+      : [XSEN_PROJECT];
+
+    // Merge in any DB-only projects (registered via UI but maybe not yet indexed on-chain)
+    for (const meta of metaRows) {
+      if (!projects.find(p => p.project_id === meta.project_id)) {
+        projects.push({
+          project_id:      meta.project_id,
+          name:            meta.name,
+          description:     meta.description,
+          token_address:   meta.token_address,
+          staking_contract: process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS ?? "0x9CD9eF69c4EE176c8115E4BCf6c604Eb46599502",
+          registrant:      meta.registrant,
+          registered_at:   Math.floor(new Date(meta.created_at).getTime() / 1000),
+          active:          true,
+          twitter:         meta.twitter,
+          discord:         meta.discord,
+          telegram:        meta.telegram,
+          tx_hash:         meta.tx_hash,
+        });
+      }
     }
-    // Return mock when contract not deployed
-    return NextResponse.json({
-      deployed: !!(process.env.XSEN_REGISTRY_ADDRESS),
-      projects: MOCK_PROJECTS,
-      count: MOCK_PROJECTS.length,
-      platform: "X-Senate AI Governance Platform",
-    });
+
+    return NextResponse.json({ projects, count: projects.length, platform: "X-Senate AI Governance Platform" });
   } catch (e) {
     return NextResponse.json({ detail: String(e) }, { status: 503 });
   }
@@ -34,34 +60,38 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    await initSchema().catch(() => {});
     const body = await req.json();
-    const { project_id, name, token_address } = body;
+    const { project_id, name, description, token_address, twitter, discord, telegram, registrant, tx_hash } = body;
 
     if (!project_id?.trim()) return NextResponse.json({ detail: "project_id required" }, { status: 400 });
+    if (!name?.trim())       return NextResponse.json({ detail: "name required" }, { status: 400 });
     if (!token_address?.startsWith("0x") || token_address.length !== 42) {
       return NextResponse.json({ detail: "Invalid token_address" }, { status: 400 });
     }
 
-    // In hackathon demo mode — registration is recorded but not on-chain unless private key is set
-    const registryAddr = process.env.XSEN_REGISTRY_ADDRESS;
-    if (!registryAddr) {
-      return NextResponse.json({
-        detail: "Registry contract not deployed. Run: python backend/scripts/deploy_contract.py",
-      }, { status: 503 });
-    }
+    const pid = project_id.trim().toUpperCase();
 
-    // In production: call registry_service functions
-    // For now: return demo success
+    await dbUpsertProjectMeta({
+      project_id:    pid,
+      name:          name.trim(),
+      description:   description?.trim() || null,
+      token_address: token_address.trim(),
+      twitter:       twitter?.trim() || null,
+      discord:       discord?.trim() || null,
+      telegram:      telegram?.trim() || null,
+      registrant:    registrant?.trim() || null,
+      tx_hash:       tx_hash?.trim() || null,
+    });
+
     return NextResponse.json({
       success: true,
-      project_id: project_id.toUpperCase(),
-      name,
+      project_id: pid,
+      name: name.trim(),
       token_address,
-      staking_contract: "0x0000000000000000000000000000000000000000",
-      tx_hash: "0x" + "0".repeat(64),
-      message: `Project ${project_id.toUpperCase()} registered! Create proposals at POST /api/proposals/ with project_id='${project_id.toUpperCase()}'.`,
+      message: `Project ${pid} registered! Governance page: /projects/${pid}`,
     });
-  } catch (e) {
-    return NextResponse.json({ detail: String(e) }, { status: 503 });
+  } catch (e: any) {
+    return NextResponse.json({ detail: String(e) }, { status: 500 });
   }
 }

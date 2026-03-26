@@ -120,6 +120,68 @@ export async function initSchema() {
     )
   `;
   await sql`ALTER TABLE user_agents ADD COLUMN IF NOT EXISTS avatar_base64 TEXT`;
+  await sql`
+    CREATE TABLE IF NOT EXISTS projects_meta (
+      project_id    TEXT PRIMARY KEY,
+      name          TEXT NOT NULL,
+      description   TEXT,
+      token_address TEXT,
+      twitter       TEXT,
+      discord       TEXT,
+      telegram      TEXT,
+      registrant    TEXT,
+      tx_hash       TEXT,
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
+}
+
+// ─── Projects Meta ───────────────────────────────────────────────────────────
+
+export interface ProjectMetaRow {
+  project_id: string;
+  name: string;
+  description: string | null;
+  token_address: string | null;
+  twitter: string | null;
+  discord: string | null;
+  telegram: string | null;
+  registrant: string | null;
+  tx_hash: string | null;
+  created_at: string;
+}
+
+export async function dbUpsertProjectMeta(data: {
+  project_id: string; name: string; description?: string;
+  token_address?: string; twitter?: string; discord?: string;
+  telegram?: string; registrant?: string; tx_hash?: string;
+}): Promise<void> {
+  const sql = getSql();
+  await sql`
+    INSERT INTO projects_meta (project_id, name, description, token_address, twitter, discord, telegram, registrant, tx_hash)
+    VALUES (
+      ${data.project_id}, ${data.name}, ${data.description ?? null},
+      ${data.token_address ?? null}, ${data.twitter ?? null},
+      ${data.discord ?? null}, ${data.telegram ?? null},
+      ${data.registrant ?? null}, ${data.tx_hash ?? null}
+    )
+    ON CONFLICT (project_id) DO UPDATE SET
+      name = EXCLUDED.name, description = EXCLUDED.description,
+      twitter = EXCLUDED.twitter, discord = EXCLUDED.discord,
+      telegram = EXCLUDED.telegram, tx_hash = COALESCE(EXCLUDED.tx_hash, projects_meta.tx_hash)
+  `;
+}
+
+export async function dbGetProjectMeta(projectId: string): Promise<ProjectMetaRow | null> {
+  const sql = getSql();
+  const rows = await sql`SELECT * FROM projects_meta WHERE project_id = ${projectId.toUpperCase()} LIMIT 1` as ProjectMetaRow[];
+  return rows[0] ?? null;
+}
+
+export async function dbListProjectsMeta(): Promise<ProjectMetaRow[]> {
+  const sql = getSql();
+  const rows = await sql`SELECT * FROM projects_meta ORDER BY created_at DESC` as ProjectMetaRow[];
+  return rows as unknown as ProjectMetaRow[];
 }
 
 // ─── User Agents (UGA) ────────────────────────────────────────────────────────

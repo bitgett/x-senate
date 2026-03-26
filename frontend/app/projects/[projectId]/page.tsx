@@ -1,161 +1,214 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { fetchProject, fetchProposals } from "@/lib/api";
-import { Proposal, Project, STATUS_LABELS } from "@/types";
-
-const BASE = "";
+import { useWallet } from "@/contexts/WalletContext";
+import { STATUS_LABELS } from "@/types";
 
 function truncateAddr(addr: string) {
   if (!addr || addr.length < 10) return addr;
-  return `${addr.slice(0, 8)}...${addr.slice(-6)}`;
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+}
+function fmt(v: number) {
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M`;
+  if (v >= 1_000)     return `${(v / 1_000).toFixed(1)}K`;
+  return v.toFixed(2);
 }
 
-function formatXSEN(val: number): string {
-  if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(2)}M`;
-  if (val >= 1_000)     return `${(val / 1_000).toFixed(1)}K`;
-  return val.toFixed(2);
-}
+const GENESIS_5 = [
+  { name: "Guardian",  icon: "🛡️", color: "text-blue-400"   },
+  { name: "Merchant",  icon: "💰", color: "text-yellow-400" },
+  { name: "Architect", icon: "⚙️", color: "text-green-400"  },
+  { name: "Diplomat",  icon: "🤝", color: "text-purple-400" },
+  { name: "Populist",  icon: "👥", color: "text-red-400"    },
+];
 
 export default function ProjectPage() {
-  const params = useParams();
+  const params    = useParams();
+  const router    = useRouter();
   const projectId = (params?.projectId as string ?? "").toUpperCase();
+  const { wallet, openModal } = useWallet();
 
-  const [project, setProject]     = useState<Project | null>(null);
-  const [proposals, setProposals] = useState<Proposal[]>([]);
-  const [staking, setStaking]     = useState<any>(null);
-  const [loading, setLoading]     = useState(true);
-  const [notFound, setNotFound]   = useState(false);
+  const [project,  setProject]  = useState<any>(null);
+  const [proposals,setProposals]= useState<any[]>([]);
+  const [staking,  setStaking]  = useState<any>(null);
+  const [loading,  setLoading]  = useState(true);
+  const [notFound, setNotFound] = useState(false);
+
+  // Submit Proposal modal
+  const [showSubmit,   setShowSubmit]   = useState(false);
+  const [subTitle,     setSubTitle]     = useState("");
+  const [subSummary,   setSubSummary]   = useState("");
+  const [subMotivation,setSubMotivation]= useState("");
+  const [subAction,    setSubAction]    = useState("");
+  const [submitting,   setSubmitting]   = useState(false);
+  const [subError,     setSubError]     = useState("");
 
   useEffect(() => {
     if (!projectId) return;
     Promise.all([
-      fetchProject(projectId).catch(() => null),
-      fetchProposals(projectId).catch(() => []),
-      fetch(`${BASE}/api/registry/projects/${projectId}/staking`).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`/api/registry/projects/${projectId}`).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`/api/proposals?project_id=${projectId}`).then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch(`/api/registry/projects/${projectId}/staking`).then(r => r.ok ? r.json() : null).catch(() => null),
     ]).then(([proj, props, stk]) => {
       if (!proj || proj.detail) {
-        setNotFound(true);
+        // Try loading from registry API which merges on-chain + DB
+        fetch("/api/registry/projects")
+          .then(r => r.json())
+          .then(d => {
+            const found = d.projects?.find((p: any) => p.project_id === projectId);
+            if (!found) { setNotFound(true); }
+            else { setProject(found); }
+            setLoading(false);
+          });
       } else {
         setProject(proj);
-        setProposals(Array.isArray(props) ? props : []);
+        setProposals(Array.isArray(props) ? props : (props?.proposals ?? []));
         setStaking(stk);
+        setLoading(false);
       }
-      setLoading(false);
     });
   }, [projectId]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-64 text-gray-500">
-        Loading project...
-      </div>
-    );
+  async function handleSubmitProposal() {
+    if (!wallet) { openModal(); return; }
+    if (!subTitle.trim() || !subSummary.trim()) { setSubError("Title and summary are required."); return; }
+    setSubmitting(true); setSubError("");
+    try {
+      const res = await fetch("/api/proposals/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_id:      projectId,
+          title:           subTitle.trim(),
+          summary:         subSummary.trim(),
+          motivation:      subMotivation.trim() || null,
+          proposed_action: subAction.trim() || null,
+          proposer_address: wallet,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail ?? "Submission failed");
+      setShowSubmit(false);
+      setSubTitle(""); setSubSummary(""); setSubMotivation(""); setSubAction("");
+      router.push(`/proposals/${data.id}`);
+    } catch (e: any) {
+      setSubError(e.message ?? "Submission failed");
+    }
+    setSubmitting(false);
   }
 
-  if (notFound) {
-    return (
-      <div className="max-w-2xl mx-auto text-center py-16">
-        <div className="text-4xl mb-4">❓</div>
-        <h1 className="text-2xl font-bold text-white mb-2">Project Not Found</h1>
-        <p className="text-gray-400 mb-6">"{projectId}" is not registered in X-Senate.</p>
-        <Link href="/projects" className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-full text-sm transition-colors">
-          Back to Projects
-        </Link>
-      </div>
-    );
-  }
+  if (loading) return <div className="flex items-center justify-center min-h-64 text-gray-500">Loading project...</div>;
 
-  const statusCounts = proposals.reduce(
-    (acc, p) => { acc[p.status] = (acc[p.status] || 0) + 1; return acc; },
-    {} as Record<string, number>
+  if (notFound) return (
+    <div className="max-w-2xl mx-auto text-center py-16">
+      <div className="text-4xl mb-4">❓</div>
+      <h1 className="text-2xl font-bold text-white mb-2">Project Not Found</h1>
+      <p className="text-gray-400 mb-6">"{projectId}" is not registered in X-Senate.</p>
+      <Link href="/projects" className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-full text-sm transition-colors">
+        Back to Projects
+      </Link>
+    </div>
   );
+
+  const statusCounts = proposals.reduce((acc: any, p: any) => { acc[p.status] = (acc[p.status] || 0) + 1; return acc; }, {});
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
 
       {/* Back */}
-      <Link href="/projects" className="text-sm text-gray-500 hover:text-gray-300 transition-colors">
+      <Link href="/projects" className="text-sm text-gray-500 hover:text-gray-300 transition-colors inline-block">
         ← All Projects
       </Link>
 
       {/* Project header */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-1 flex-wrap">
               <h1 className="text-3xl font-bold text-white">{project?.name}</h1>
-              <span className="text-sm bg-gray-800 text-gray-300 rounded-full px-3 py-0.5 font-mono">
-                {project?.project_id}
-              </span>
+              <span className="text-sm bg-gray-800 text-gray-300 rounded-full px-3 py-0.5 font-mono">{project?.project_id}</span>
               {project?.project_id === "XSEN" && (
                 <span className="text-xs bg-purple-800 text-purple-200 rounded-full px-2 py-0.5">Native</span>
               )}
             </div>
+            {project?.description && (
+              <p className="text-gray-400 text-sm mt-1 mb-3">{project.description}</p>
+            )}
             <div className="text-sm text-gray-500 space-y-1">
-              <div>
-                Token:{" "}
-                <a
-                  href={`https://www.oklink.com/xlayer/address/${project?.token_address}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-mono text-blue-400 hover:underline"
-                >
-                  {truncateAddr(project?.token_address ?? "")}
-                </a>
-              </div>
-              <div>
-                Staking:{" "}
-                <a
-                  href={`https://www.oklink.com/xlayer/address/${project?.staking_contract}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-mono text-blue-400 hover:underline"
-                >
-                  {truncateAddr(project?.staking_contract ?? "")}
-                </a>
-              </div>
+              <div>Token: <a href={`https://www.oklink.com/xlayer/address/${project?.token_address}`} target="_blank" rel="noopener noreferrer" className="font-mono text-blue-400 hover:underline">{truncateAddr(project?.token_address ?? "")}</a></div>
             </div>
+            {/* Social links */}
+            {(project?.twitter || project?.discord || project?.telegram) && (
+              <div className="flex gap-2 mt-3 flex-wrap">
+                {project.twitter && (
+                  <a href={project.twitter} target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-blue-400 bg-blue-900/20 border border-blue-800/30 px-3 py-1 rounded-full hover:bg-blue-900/40 transition-colors">
+                    𝕏 Twitter
+                  </a>
+                )}
+                {project.discord && (
+                  <a href={project.discord} target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-indigo-400 bg-indigo-900/20 border border-indigo-800/30 px-3 py-1 rounded-full hover:bg-indigo-900/40 transition-colors">
+                    Discord
+                  </a>
+                )}
+                {project.telegram && (
+                  <a href={project.telegram} target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-sky-400 bg-sky-900/20 border border-sky-800/30 px-3 py-1 rounded-full hover:bg-sky-900/40 transition-colors">
+                    Telegram
+                  </a>
+                )}
+              </div>
+            )}
           </div>
-          <div className="text-4xl">🔷</div>
+          <div className="flex flex-col items-end gap-2">
+            <span className="text-4xl">{project?.project_id === "XSEN" ? "🏛️" : "🔷"}</span>
+            <button
+              onClick={() => wallet ? setShowSubmit(true) : openModal()}
+              className="bg-purple-600 hover:bg-purple-500 text-white font-semibold px-4 py-2 rounded-full text-sm transition-colors"
+              style={{ boxShadow: "0 0 12px rgba(139,92,246,0.3)" }}
+            >
+              + Submit Proposal
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Genesis 5 Connected */}
+      <div className="border border-purple-800/40 bg-purple-900/10 rounded-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+            <span className="text-sm font-semibold text-white">Genesis 5 Senate</span>
+            <span className="text-xs text-green-400 bg-green-900/30 px-2 py-0.5 rounded-full">Connected</span>
+          </div>
+          <span className="text-xs text-gray-500">AI agents vote on all proposals</span>
+        </div>
+        <div className="flex gap-3 flex-wrap">
+          {GENESIS_5.map(a => (
+            <div key={a.name} className="flex items-center gap-1.5 bg-gray-900/60 border border-gray-800/60 rounded-full px-3 py-1">
+              <span className="text-sm">{a.icon}</span>
+              <span className={`text-xs font-medium ${a.color}`}>{a.name}</span>
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Staking stats */}
       {staking && (
-        <div>
-          <h2 className="text-lg font-semibold text-white mb-3">Staking Overview</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <div className="text-xs text-gray-500 mb-1">Total Staked</div>
-              <div className="text-xl font-bold text-white">
-                {staking.totals?.total_staked_xsen != null
-                  ? formatXSEN(staking.totals.total_staked_xsen)
-                  : "—"}
-              </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            { label: "Total Staked", value: staking.totals?.total_staked_xsen != null ? fmt(staking.totals.total_staked_xsen) + " XSEN" : "—", color: "text-white" },
+            { label: "Effective VP", value: staking.totals?.total_effective_vp_xsen != null ? fmt(staking.totals.total_effective_vp_xsen) : "—", color: "text-purple-300" },
+            { label: "Epoch",        value: staking.epoch?.epoch_id != null ? `#${staking.epoch.epoch_id}` : "—", color: "text-blue-300" },
+            { label: "Reward Pool",  value: staking.epoch?.reward_pool_xsen != null ? fmt(staking.epoch.reward_pool_xsen) + " XSEN" : "—", color: "text-green-300" },
+          ].map(s => (
+            <div key={s.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
+              <div className="text-xs text-gray-500 mt-1">{s.label}</div>
             </div>
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <div className="text-xs text-gray-500 mb-1">Effective VP</div>
-              <div className="text-xl font-bold text-purple-300">
-                {staking.totals?.total_effective_vp_xsen != null
-                  ? formatXSEN(staking.totals.total_effective_vp_xsen)
-                  : "—"}
-              </div>
-            </div>
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <div className="text-xs text-gray-500 mb-1">Epoch</div>
-              <div className="text-xl font-bold text-blue-300">#{staking.epoch?.epoch_id ?? "—"}</div>
-            </div>
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <div className="text-xs text-gray-500 mb-1">Reward Pool</div>
-              <div className="text-xl font-bold text-green-300">
-                {staking.epoch?.reward_pool_xsen != null
-                  ? formatXSEN(staking.epoch.reward_pool_xsen)
-                  : "—"}
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
       )}
 
@@ -176,17 +229,30 @@ export default function ProjectPage() {
 
       {/* Proposals list */}
       <div>
-        <h2 className="text-xl font-semibold text-white mb-4">Governance Proposals</h2>
-
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-white">Governance Proposals</h2>
+          <button
+            onClick={() => wallet ? setShowSubmit(true) : openModal()}
+            className="text-xs border border-purple-700/50 hover:border-purple-500 text-purple-400 hover:text-purple-300 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            + New Proposal
+          </button>
+        </div>
         {proposals.length === 0 ? (
           <div className="bg-gray-900 border border-dashed border-gray-700 rounded-xl p-10 text-center">
             <div className="text-4xl mb-3">📋</div>
-            <p className="text-gray-400">No proposals yet for {project?.name}.</p>
+            <p className="text-gray-400 mb-2">No proposals yet for {project?.name}.</p>
+            <button
+              onClick={() => wallet ? setShowSubmit(true) : openModal()}
+              className="text-sm bg-purple-600 hover:bg-purple-500 text-white px-5 py-2 rounded-full transition-colors"
+            >
+              Submit First Proposal
+            </button>
           </div>
         ) : (
           <div className="space-y-3">
-            {proposals.map((p) => {
-              const statusInfo = STATUS_LABELS[p.status];
+            {proposals.map((p: any) => {
+              const statusInfo = (STATUS_LABELS as any)[p.status];
               return (
                 <Link key={p.id} href={`/proposals/${p.id}`} className="block">
                   <div className="bg-gray-900 border border-gray-800 hover:border-gray-600 rounded-xl p-5 transition-all">
@@ -202,15 +268,13 @@ export default function ProjectPage() {
                         <p className="text-gray-400 text-sm mt-1 line-clamp-2">{p.summary}</p>
                       </div>
                       <div className="text-right shrink-0">
-                        {(p.status === "In_Debate" || p.status === "Executed") && (
+                        {(p.approve_count > 0 || p.reject_count > 0) && (
                           <div className="flex gap-3 text-sm">
                             <span className="text-green-400">✓ {p.approve_count}</span>
                             <span className="text-red-400">✗ {p.reject_count}</span>
                           </div>
                         )}
-                        <div className="text-xs text-gray-600 mt-1">
-                          {new Date(p.created_at).toLocaleDateString()}
-                        </div>
+                        <div className="text-xs text-gray-600 mt-1">{new Date(p.created_at).toLocaleDateString()}</div>
                       </div>
                     </div>
                   </div>
@@ -221,6 +285,62 @@ export default function ProjectPage() {
         )}
       </div>
 
+      {/* Submit Proposal Modal */}
+      {showSubmit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setShowSubmit(false)}>
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-lg shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="text-lg font-bold text-white">Submit Proposal</h3>
+                <p className="text-xs text-gray-500 mt-0.5">{project?.name} · Reviewed by Genesis 5 Senate</p>
+              </div>
+              <button onClick={() => setShowSubmit(false)} className="text-gray-600 hover:text-gray-400 text-xl">✕</button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-gray-400 uppercase tracking-wide mb-1 block">Title *</label>
+                <input type="text" placeholder="e.g. Increase staking rewards by 15%" value={subTitle}
+                  onChange={e => setSubTitle(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 uppercase tracking-wide mb-1 block">Summary *</label>
+                <textarea placeholder="Brief description of what this proposal does..." value={subSummary}
+                  onChange={e => setSubSummary(e.target.value)} rows={3}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 resize-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 uppercase tracking-wide mb-1 block">Motivation</label>
+                <textarea placeholder="Why is this proposal needed?" value={subMotivation}
+                  onChange={e => setSubMotivation(e.target.value)} rows={2}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 resize-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 uppercase tracking-wide mb-1 block">Proposed Action</label>
+                <textarea placeholder="Specific actions to be taken if approved..." value={subAction}
+                  onChange={e => setSubAction(e.target.value)} rows={2}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 resize-none"
+                />
+              </div>
+              {subError && <div className="bg-red-900/30 border border-red-700 rounded-lg p-3 text-sm text-red-300">{subError}</div>}
+              <div className="flex gap-3">
+                <button onClick={() => setShowSubmit(false)}
+                  className="flex-1 border border-gray-700 text-gray-400 hover:text-gray-300 py-2.5 rounded-xl text-sm transition-colors">
+                  Cancel
+                </button>
+                <button onClick={handleSubmitProposal} disabled={submitting}
+                  className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors">
+                  {submitting ? "Submitting..." : "Submit to Senate →"}
+                </button>
+              </div>
+              <p className="text-[11px] text-gray-700 text-center">Genesis 5 AI agents will review and vote on this proposal</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
