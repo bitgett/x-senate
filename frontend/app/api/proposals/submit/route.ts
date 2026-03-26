@@ -81,10 +81,7 @@ async function verifyPayment(txHash: string, requiredWei: bigint): Promise<{ ok:
       amount: requiredWei.toString(),
     });
     if (okx.verified) return { ok: true };
-    // If OKX returns a definitive rejection, trust it
-    if (okx.error && !okx.error.includes("unavailable")) {
-      return { ok: false, error: okx.error };
-    }
+    // Any OKX error → fall through to RPC receipt check (more reliable)
   }
 
   // Fallback: direct X Layer RPC verification

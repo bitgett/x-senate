@@ -30,7 +30,7 @@ async function verifyPayment(txHash: string, requiredWei: bigint): Promise<{ ok:
   if (hasOkxKeys()) {
     const okx = await okxX402Verify({ txHash, chainIndex: "196", tokenAddress: XSEN_ADDRESS, toAddress: TREASURY, amount: requiredWei.toString() });
     if (okx.verified) return { ok: true };
-    if (okx.error && !okx.error.includes("unavailable")) return { ok: false, error: okx.error };
+    // Any OKX error → fall through to RPC receipt check (more reliable)
   }
   try {
     const res = await fetch(XLAYER_RPC, {

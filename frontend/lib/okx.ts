@@ -103,7 +103,8 @@ export async function okxX402Verify(params: {
   amount?: string;
 }): Promise<{ verified: boolean; error?: string; data?: unknown }> {
   try {
-    const data = await okxPost("/api/v6/x402/verify", params);
+    const body = { x402Version: 1, ...params };
+    const data = await okxPost("/api/v6/x402/verify", body);
     if (data.code === "0") return { verified: true, data: data.data };
     return { verified: false, error: data.msg ?? "OKX x402 verify failed" };
   } catch (e: any) {
