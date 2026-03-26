@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { dbCreateUGA, initSchema } from "@/lib/db";
+import { dbCreateUGA, dbIsPaymentHashUsed, dbMarkPaymentHashUsed, initSchema } from "@/lib/db";
 import { hasOkxKeys, okxGetTokenPrice, okxX402Verify } from "@/lib/okx";
 
 const XLAYER_RPC   = "https://rpc.xlayer.tech";
@@ -81,6 +81,11 @@ export async function POST(req: NextRequest) {
       }, { status: 402 });
     }
 
+    // Replay protection: reject reused tx hashes
+    if (await dbIsPaymentHashUsed(payment_tx_hash)) {
+      return NextResponse.json({ detail: "Payment already used — each transaction can only register one agent" }, { status: 402 });
+    }
+
     // Verify payment inline (no internal HTTP hop)
     const requiredWei = await getRequiredXsenWei();
     const verify = await verifyPayment(payment_tx_hash, requiredWei);
@@ -96,6 +101,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ detail: "Avatar too large. Max 200KB." }, { status: 400 });
     }
 
+    await dbMarkPaymentHashUsed(payment_tx_hash, "agent_registration");
     const agent = await dbCreateUGA({ wallet_address, agent_name, system_prompt, focus_area, avatar_base64 });
     return NextResponse.json(agent, { status: 201 });
   } catch (e: any) {

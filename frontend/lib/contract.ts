@@ -5,8 +5,8 @@
 import { ethers } from "ethers";
 
 const XLAYER_RPC    = "https://rpc.xlayer.tech";
-const STAKING_ADDR  = process.env.XSEN_STAKING_ADDRESS  ?? "0x9CD9eF69c4EE176c8115E4BCf6c604Eb46599502";
-const REGISTRY_ADDR = process.env.XSEN_REGISTRY_ADDRESS ?? "0xFd11e955CCEA6346911F33119B3bf84b3f0E6678";
+const STAKING_ADDR  = process.env.XSEN_STAKING_ADDRESS  ?? "0xc8FD7B12De6bFb10dF3eaCb38AAc09CBbeb25bFD";
+const REGISTRY_ADDR = process.env.XSEN_REGISTRY_ADDRESS ?? "0x111bC1681fc34EAcab66f75D8273C4ECD49b13e5";
 
 const STAKING_ABI = [
   "function getEpochInfo() view returns (uint256 epochId, uint256 startTime, uint256 endTime, uint256 rewardPool, bool finalized)",

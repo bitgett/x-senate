@@ -34,10 +34,13 @@ Any project with an ERC20 token on X Layer can register and immediately access:
 │  Next.js 16 App Router (10 pages)           │
 │  ├── /app/api    Serverless Functions       │
 │  ├── /lib        DB · AI · OKX · Contract   │
+│  │               rateLimit · agents         │
 │  └── /contexts   WalletContext (global)     │
 │                                             │
-│  Neon Postgres   proposals, votes, agents,  │
-│                  projects_meta              │
+│  Neon Postgres   proposals, agent_votes,    │
+│                  debate_turns, user_agents, │
+│                  projects_meta,             │
+│                  used_payment_hashes        │
 │  Anthropic Claude  Genesis 5 AI reasoning  │
 └──────────────┬──────────────────────────────┘
                │ ethers.js v6
@@ -158,14 +161,16 @@ Per-project governance page (`/projects/[id]`) includes:
 | Contract | Address |
 |---|---|
 | XToken (XSEN) | `0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b` |
-| XSenateStaking | `0x9CD9eF69c4EE176c8115E4BCf6c604Eb46599502` |
-| XSenateGovernor | `0xa140f36Cc529e6487b877547A543213aD2ae39dF` |
-| XSenateRegistry | `0xFd11e955CCEA6346911F33119B3bf84b3f0E6678` |
+| XSenateStaking | `0xc8FD7B12De6bFb10dF3eaCb38AAc09CBbeb25bFD` |
+| XSenateGovernor | `0xeD57C957D9f1F4CBF39155303B7143B605ff3546` |
+| XSenateRegistry | `0x111bC1681fc34EAcab66f75D8273C4ECD49b13e5` |
 | QToken (QTKN) | `0x678936A224c19FF41E776845C4044aD9aB424D6b` |
 | XSEN/USDT Pool | `0xb524efba890ed7087a4188b9b0148eb7fb954da9` (V3/Algebra) |
 | Treasury | `0x8266D8e3B231dfD16fa21e40Cc3B99F38bC4B6C2` |
 
 > QToken (QTKN) is a test ERC20 deployed for demo registration purposes. 10M supply.
+
+> Staking, Governor, and Registry were redeployed with security fixes applied (SEC-01 + SEC-05). XToken address is unchanged — LP pool and price feeds are preserved.
 
 ---
 
@@ -218,6 +223,7 @@ Two separate x402-style flows:
 GET /api/x402/quote → live XSEN price
 User approves + transfers XSEN to treasury
 POST /api/x402/verify (OKX) → fallback: X Layer RPC receipt check
+Replay check: tx_hash recorded in used_payment_hashes (unique constraint)
 On success → agent saved to DB
 ```
 
@@ -242,6 +248,35 @@ POST /api/registry/projects → social meta saved to DB
 
 ---
 
+## Security
+
+The following security controls were implemented and are live in production:
+
+### Contract Layer
+
+| ID | Fix | Contract |
+|---|---|---|
+| SEC-01 | `castSenateVote()` checks `agentAddresses[agentName]` — only the registered caller address can vote as each agent. `address(0)` = unrestricted (backward-compatible). | `XSenateGovernor.sol` |
+| SEC-05 | Staking reward payout no longer falls back to `xToken.mint()`. If epoch reward pool is depleted, `claimReward()` reverts rather than inflating supply. | `XSenateStaking.sol` |
+
+### API Layer
+
+| ID | Fix | File |
+|---|---|---|
+| SEC-02 | Payment tx hash replay protection — `used_payment_hashes` table with `PRIMARY KEY` on `tx_hash`. Hash recorded atomically before action completes. Same tx hash rejected with HTTP 402 on reuse. | `lib/db.ts`, `proposals/submit/route.ts`, `uga/register/route.ts` |
+| SEC-04 | `DELETE /api/proposals/[id]` requires `x-admin-secret` header matching `ADMIN_SECRET` env var. Returns 401 without it. | `proposals/[id]/route.ts` |
+| Rate Limit | IP-based rate limiting on all Claude-calling routes: Sentinel scan (3/min), Senate review (5/min), Debate stream (5/min), Proposal submit (10/min). | `lib/rateLimit.ts` |
+
+### Known Limitations (Out of Scope for Hackathon)
+
+| ID | Issue | Status |
+|---|---|---|
+| SEC-06 | 7-day unstake cooldown enforced only in frontend localStorage — contract `unstake()` has no on-chain cooldown. | Roadmap: `requestUnstake()` + `completeUnstake()` pattern |
+| SEC-07 | `delegateVote()` in Governor accepts arbitrary `votingPower` from caller. | Roadmap: derive from staking contract |
+| SEC-04 partial | `senate/review`, `debate/start`, `execute` routes accept unauthenticated POST. Economic gates (payment, VP threshold) provide spam resistance at the proposal level. | Roadmap: wallet-signed authorization |
+
+---
+
 ## Local Development
 
 ```bash
@@ -250,21 +285,31 @@ npm install
 cp .env.local.example .env.local
 # Required:
 #   ANTHROPIC_API_KEY=...
-#   DATABASE_URL=...          (Neon Postgres)
-#   OKX_API_KEY=...           (OKX OnchainOS)
+#   DATABASE_URL=...              (Neon Postgres)
+#   OKX_API_KEY=...               (OKX OnchainOS)
 #   OKX_SECRET_KEY=...
 #   OKX_PASSPHRASE=...
-# Optional:
-#   NEXT_PUBLIC_XSEN_STAKING_ADDRESS=...
-#   NEXT_PUBLIC_XSEN_TOKEN_ADDRESS=...
-#   NEXT_PUBLIC_XSEN_REGISTRY_ADDRESS=...
+#   ADMIN_SECRET=...              (any strong secret — protects DELETE /api/proposals/[id])
+# Optional (defaults to mainnet addresses):
+#   NEXT_PUBLIC_XSEN_STAKING_ADDRESS=0xc8FD7B12De6bFb10dF3eaCb38AAc09CBbeb25bFD
+#   NEXT_PUBLIC_XSEN_TOKEN_ADDRESS=0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b
+#   NEXT_PUBLIC_XSEN_REGISTRY_ADDRESS=0x111bC1681fc34EAcab66f75D8273C4ECD49b13e5
 npm run dev
 ```
 
-**Deploy Q Token (for testing):**
+**Redeploy contracts (upgrade only — keeps XToken):**
 ```bash
 cd deploy
 echo "DEPLOYER_PRIVATE_KEY=0x..." > .env
+npx hardhat compile
+node scripts/deploy-upgrade.js
+# If post-setup fails due to nonce issues:
+node scripts/post-setup.js
+```
+
+**Deploy Q Token (for demo testing):**
+```bash
+cd deploy
 npx hardhat compile
 node scripts/deploy-qtoken.js
 ```

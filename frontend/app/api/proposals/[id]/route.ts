@@ -12,7 +12,11 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   }
 }
 
-export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const secret = req.headers.get("x-admin-secret");
+  if (!secret || secret !== process.env.ADMIN_SECRET) {
+    return NextResponse.json({ detail: "Unauthorized" }, { status: 401 });
+  }
   try {
     const { id } = await params;
     const proposal = await dbGetProposal(id);

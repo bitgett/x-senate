@@ -3,10 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 const XLAYER_RPC     = "https://rpc.xlayer.tech";
 const XLAYER_EXPLORER = "https://www.okx.com/web3/explorer/xlayer";
 
-const STAKING_ADDR  = "0x9CD9eF69c4EE176c8115E4BCf6c604Eb46599502".toLowerCase();
-const TOKEN_ADDR    = "0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b".toLowerCase();
-const GOVERNOR_ADDR = "0xa140f36Cc529e6487b877547A543213aD2ae39dF".toLowerCase();
-const REGISTRY_ADDR = "0xFd11e955CCEA6346911F33119B3bf84b3f0E6678".toLowerCase();
+const STAKING_ADDR  = (process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS  ?? "0xc8FD7B12De6bFb10dF3eaCb38AAc09CBbeb25bFD").toLowerCase();
+const TOKEN_ADDR    = (process.env.NEXT_PUBLIC_XSEN_TOKEN_ADDRESS    ?? "0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b").toLowerCase();
+const GOVERNOR_ADDR = (process.env.XSEN_GOVERNOR_ADDRESS             ?? "0xeD57C957D9f1F4CBF39155303B7143B605ff3546").toLowerCase();
+const REGISTRY_ADDR = (process.env.NEXT_PUBLIC_XSEN_REGISTRY_ADDRESS ?? "0x111bC1681fc34EAcab66f75D8273C4ECD49b13e5").toLowerCase();
 
 // Known event topic0 hashes → label / category
 const EVENT_MAP: Record<string, { label: string; category: string }> = {

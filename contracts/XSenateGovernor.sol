@@ -291,6 +291,11 @@ contract XSenateGovernor {
         VoteChoice choice,
         string memory reason
     ) external proposalExists(proposalId) {
+        // Caller authorization: if an address is registered for this agent, only it may vote.
+        // address(0) means unrestricted (backward-compatible with current deployment).
+        address authorized = agentAddresses[agentName];
+        require(authorized == address(0) || msg.sender == authorized, "XSenate: caller not authorized for this agent");
+
         Proposal storage p = proposals[proposalId];
         require(p.status == ProposalStatus.InSenate, "XSenate: not in senate review");
         require(!senateVotes[proposalId][agentName].exists, "XSenate: already voted");

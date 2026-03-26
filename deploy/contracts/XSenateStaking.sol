@@ -14,9 +14,9 @@ interface IXToken {
  *
  * TIER TABLE:
  *  Flexible  | no lock  | 5%  APY | 1.0x VP
- *  Lock30    | 30 days  | 10% APY | 1.5x VP
- *  Lock90    | 90 days  | 20% APY | 2.0x VP
- *  Lock180   | 180 days | 35% APY | 3.0x VP
+ *  Lock30    | 30 days  | 10% APY | 1.1x VP
+ *  Lock90    | 90 days  | 20% APY | 1.3x VP
+ *  Lock180   | 180 days | 35% APY | 1.5x VP  (max)
  *
  * AGENT SYSTEM:
  *  - Genesis 5: platform agents (no creator reward)
@@ -512,13 +512,10 @@ contract XSenateStaking {
 
         p.accReward = 0;
 
-        // Pay delegator 100% from reward pool (or mint)
-        if (reward <= epochRewardPool[currentEpoch]) {
-            epochRewardPool[currentEpoch] -= reward;
-            require(xToken.transfer(msg.sender, reward), "Staking: transfer failed");
-        } else {
-            xToken.mint(msg.sender, reward);
-        }
+        // Pay from reward pool only — no mint fallback (prevents unbounded token inflation)
+        require(reward <= epochRewardPool[currentEpoch], "Staking: reward pool depleted for this epoch");
+        epochRewardPool[currentEpoch] -= reward;
+        require(xToken.transfer(msg.sender, reward), "Staking: transfer failed");
 
         // If delegated to a User Agent, accrue 3% creator reward from ecosystem fund
         if (bytes(p.delegatedAgent).length > 0) {

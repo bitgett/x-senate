@@ -6,7 +6,7 @@ import { fetchProposals, fetchPlatformStats } from "@/lib/api";
 import { Proposal, STATUS_LABELS } from "@/types";
 import { useWallet } from "@/contexts/WalletContext";
 
-const STAKING_ADDRESS = process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS ?? "0x9CD9eF69c4EE176c8115E4BCf6c604Eb46599502";
+const STAKING_ADDRESS = process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS ?? "0xc8FD7B12De6bFb10dF3eaCb38AAc09CBbeb25bFD";
 const STAKING_ABI = [
   "function getEffectiveVP(address user) view returns (uint256)",
   "function getUserPositions(address user) view returns (tuple(uint256 id, address owner, uint256 amount, uint8 tier, uint256 lockEnd, uint256 stakedAt, uint256 lastRewardAt, uint256 accReward, string delegatedAgent, bool active)[])",
@@ -91,7 +91,7 @@ export default function GovernancePage() {
     if (!wallet || !walletType) return;
     try {
       const raw = rawProvider();
-      const provider = new ethers.BrowserProvider(raw);
+      const provider = new ethers.BrowserProvider(raw, { chainId: 196, name: "xlayer" });
       const staking = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, provider);
       const pos = await staking.getUserPositions(wallet).catch(() => []);
       const parsed = pos.map((p: any) => ({
@@ -114,7 +114,7 @@ export default function GovernancePage() {
     setDelegating(agentName);
     setTxStatus(null);
     try {
-      const provider = new ethers.BrowserProvider(rawProvider());
+      const provider = new ethers.BrowserProvider(rawProvider(), { chainId: 196, name: "xlayer" });
       const signer = await provider.getSigner();
       const staking = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
       const tx = await staking.delegatePosition(activePos.id, agentName);
@@ -408,7 +408,7 @@ export default function GovernancePage() {
 
                       // Step 2: Pay XSEN to treasury
                       const TOKEN_ABI = ["function transfer(address to, uint256 amount) returns (bool)"];
-                      const provider = new ethers.BrowserProvider(rawProvider());
+                      const provider = new ethers.BrowserProvider(rawProvider(), { chainId: 196, name: "xlayer" });
                       const signer = await provider.getSigner();
                       const token = new ethers.Contract(quote.xsen_token, TOKEN_ABI, signer);
                       const payTx = await token.transfer(quote.treasury, BigInt(quote.xsen_amount_wei));

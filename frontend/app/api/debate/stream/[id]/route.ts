@@ -5,8 +5,13 @@
 import { NextRequest } from "next/server";
 import { dbGetProposal, dbGetDebateTurns, dbSaveDebateTurn, dbUpdateProposal } from "@/lib/db";
 import { runRelayDebate } from "@/lib/agents";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 
-export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const ip = getClientIp(req);
+  if (!checkRateLimit(`${ip}:debate_stream`, 5, 60_000)) {
+    return new Response(JSON.stringify({ error: "Too many requests. Please wait before retrying." }), { status: 429 });
+  }
   const { id } = await params;
 
   const proposal = await dbGetProposal(id);

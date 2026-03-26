@@ -2,7 +2,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { ethers } from "ethers";
 
-const STAKING_ADDRESS = process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS ?? "0x9CD9eF69c4EE176c8115E4BCf6c604Eb46599502";
+const STAKING_ADDRESS = process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS ?? "0xc8FD7B12De6bFb10dF3eaCb38AAc09CBbeb25bFD";
 const VP_ABI = ["function getEffectiveVP(address) view returns (uint256)"];
 const XLAYER = {
   chainId: "0xc4",
@@ -42,7 +42,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     try {
       const raw = type === "okx" ? (window as any).okxwallet : (window as any).ethereum;
       if (!raw) return;
-      const provider = new ethers.BrowserProvider(raw);
+      const provider = new ethers.BrowserProvider(raw, { chainId: 196, name: "xlayer" });
       const staking = new ethers.Contract(STAKING_ADDRESS, VP_ABI, provider);
       const vp = await staking.getEffectiveVP(address).catch(() => 0n);
       setVP(Number(ethers.formatEther(vp)));

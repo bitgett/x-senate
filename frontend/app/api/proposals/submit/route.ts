@@ -12,8 +12,9 @@ export const maxDuration = 60;
  * This API returns the threshold so the frontend can warn users upfront.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { dbCreateProposal, initSchema } from "@/lib/db";
+import { dbCreateProposal, dbIsPaymentHashUsed, dbMarkPaymentHashUsed, initSchema } from "@/lib/db";
 import { claudeCompleteJson } from "@/lib/agents";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 import { hasOkxKeys, okxGetTokenPrice, okxX402Verify } from "@/lib/okx";
 
 const PROPOSAL_THRESHOLD_XSEN = 1000; // must match governor contract
@@ -104,6 +105,10 @@ async function verifyPayment(txHash: string, requiredWei: bigint): Promise<{ ok:
 }
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req);
+  if (!checkRateLimit(`${ip}:submit_proposal`, 10, 60_000)) {
+    return NextResponse.json({ detail: "Too many requests. Please wait before retrying." }, { status: 429 });
+  }
   try {
     await initSchema();
     const body = await req.json();
@@ -121,6 +126,11 @@ export async function POST(req: NextRequest) {
         treasury: "0x8266D8e3B231dfD16fa21e40Cc3B99F38bC4B6C2",
         xsen_token: "0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b",
       }, { status: 402 });
+    }
+
+    // Replay protection: reject reused tx hashes
+    if (await dbIsPaymentHashUsed(payment_tx_hash)) {
+      return NextResponse.json({ detail: "Payment already used — each transaction can only fund one proposal" }, { status: 402 });
     }
 
     // Verify payment inline (no internal HTTP hop)
@@ -173,6 +183,9 @@ Respond with JSON:
         message: "Sentinel rejected this proposal. Revise and resubmit.",
       }, { status: 422 });
     }
+
+    // Mark payment hash as consumed (prevents replay even on concurrent requests)
+    await dbMarkPaymentHashUsed(payment_tx_hash, "proposal");
 
     // ── Save as Draft ────────────────────────────────────────────────────────
     const proposal = await dbCreateProposal({

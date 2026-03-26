@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from "react";
 import { ethers } from "ethers";
 import { useWallet } from "@/contexts/WalletContext";
 
-const STAKING_ADDRESS = process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS ?? "0x9CD9eF69c4EE176c8115E4BCf6c604Eb46599502";
+const STAKING_ADDRESS = process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS ?? "0xc8FD7B12De6bFb10dF3eaCb38AAc09CBbeb25bFD";
 const TOKEN_ADDRESS   = process.env.NEXT_PUBLIC_XSEN_TOKEN_ADDRESS   ?? "0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b";
 
 const STAKING_ABI = [
@@ -136,7 +136,7 @@ export default function StakePage() {
     if (!wallet || !walletType) return;
     try {
       const raw = rawProvider();
-      const provider = new ethers.BrowserProvider(raw);
+      const provider = new ethers.BrowserProvider(raw, { chainId: 196, name: "xlayer" });
       const token   = new ethers.Contract(TOKEN_ADDRESS,   TOKEN_ABI,   provider);
       const stk     = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, provider);
       const [bal, vp] = await Promise.all([
@@ -199,7 +199,7 @@ export default function StakePage() {
     setStaking(true);
     setTxStatus(null);
     try {
-      const provider = new ethers.BrowserProvider(rawProvider());
+      const provider = new ethers.BrowserProvider(rawProvider(), { chainId: 196, name: "xlayer" });
       const signer = await provider.getSigner();
       const token = new ethers.Contract(TOKEN_ADDRESS,   TOKEN_ABI,   signer);
       const stk   = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
@@ -226,7 +226,7 @@ export default function StakePage() {
     setUnstaking(posId);
     setTxStatus(null);
     try {
-      const provider = new ethers.BrowserProvider(rawProvider());
+      const provider = new ethers.BrowserProvider(rawProvider(), { chainId: 196, name: "xlayer" });
       const signer = await provider.getSigner();
       const stk = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
       const tx = await stk.unstake(posId);
@@ -249,7 +249,7 @@ export default function StakePage() {
     setDelegating(agentName);
     setTxStatus(null);
     try {
-      const provider = new ethers.BrowserProvider(rawProvider());
+      const provider = new ethers.BrowserProvider(rawProvider(), { chainId: 196, name: "xlayer" });
       const signer = await provider.getSigner();
       const stk = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
       const tx = await stk.delegatePosition(activePos.id, agentName);
@@ -295,7 +295,7 @@ export default function StakePage() {
                     onClick={async () => {
                       if (!wallet) return;
                       try {
-                        const provider = new ethers.BrowserProvider(rawProvider());
+                        const provider = new ethers.BrowserProvider(rawProvider(), { chainId: 196, name: "xlayer" });
                         const signer = await provider.getSigner();
                         const stk = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
                         const tx = await stk.claimAllRewards();
@@ -567,7 +567,7 @@ export default function StakePage() {
                     onClick={async () => {
                       if (!wallet) return;
                       try {
-                        const provider = new ethers.BrowserProvider(rawProvider());
+                        const provider = new ethers.BrowserProvider(rawProvider(), { chainId: 196, name: "xlayer" });
                         const signer = await provider.getSigner();
                         const stk = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
                         const tx = await stk.claimAllRewards();

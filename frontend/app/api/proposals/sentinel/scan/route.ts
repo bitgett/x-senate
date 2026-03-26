@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runSentinelScan } from "@/lib/agents";
 import { dbCreateProposal, initSchema } from "@/lib/db";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 
 export const maxDuration = 60; // Vercel Pro: allow up to 60s for Claude
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req);
+  if (!checkRateLimit(`${ip}:sentinel_scan`, 3, 60_000)) {
+    return NextResponse.json({ detail: "Too many requests. Please wait before retrying." }, { status: 429 });
+  }
   try {
     await initSchema();
     const body = await req.json().catch(() => ({}));

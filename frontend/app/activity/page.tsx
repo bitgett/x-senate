@@ -4,7 +4,7 @@ import { ethers } from "ethers";
 import Link from "next/link";
 import { useWallet } from "@/contexts/WalletContext";
 
-const STAKING_ADDRESS = process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS ?? "0x9CD9eF69c4EE176c8115E4BCf6c604Eb46599502";
+const STAKING_ADDRESS = process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS ?? "0xc8FD7B12De6bFb10dF3eaCb38AAc09CBbeb25bFD";
 const TOKEN_ADDRESS   = process.env.NEXT_PUBLIC_XSEN_TOKEN_ADDRESS   ?? "0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b";
 
 const STAKING_ABI = [
@@ -57,7 +57,7 @@ export default function ActivityPage() {
 
   const loadChainData = useCallback(async (addr: string) => {
     try {
-      const provider = new ethers.BrowserProvider(rawProvider());
+      const provider = new ethers.BrowserProvider(rawProvider(), { chainId: 196, name: "xlayer" });
       const token   = new ethers.Contract(TOKEN_ADDRESS,   TOKEN_ABI,   provider);
       const staking = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, provider);
       const [bal, vp] = await Promise.all([

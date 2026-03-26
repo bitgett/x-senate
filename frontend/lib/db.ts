@@ -136,6 +136,13 @@ export async function initSchema() {
     )
   `;
   await sql`ALTER TABLE projects_meta ADD COLUMN IF NOT EXISTS logo_base64 TEXT`;
+  await sql`
+    CREATE TABLE IF NOT EXISTS used_payment_hashes (
+      tx_hash  TEXT PRIMARY KEY,
+      purpose  TEXT NOT NULL,
+      used_at  TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
 }
 
 // ─── Projects Meta ───────────────────────────────────────────────────────────
@@ -188,6 +195,23 @@ export async function dbListProjectsMeta(): Promise<ProjectMetaRow[]> {
   const sql = getSql();
   const rows = await sql`SELECT * FROM projects_meta ORDER BY created_at DESC` as ProjectMetaRow[];
   return rows as unknown as ProjectMetaRow[];
+}
+
+// ─── Payment Hash Replay Protection ──────────────────────────────────────────
+
+export async function dbIsPaymentHashUsed(txHash: string): Promise<boolean> {
+  const sql = getSql();
+  const rows = await sql`SELECT 1 FROM used_payment_hashes WHERE tx_hash = ${txHash.toLowerCase()} LIMIT 1`;
+  return rows.length > 0;
+}
+
+export async function dbMarkPaymentHashUsed(txHash: string, purpose: string): Promise<void> {
+  const sql = getSql();
+  await sql`
+    INSERT INTO used_payment_hashes (tx_hash, purpose)
+    VALUES (${txHash.toLowerCase()}, ${purpose})
+    ON CONFLICT (tx_hash) DO NOTHING
+  `;
 }
 
 // ─── User Agents (UGA) ────────────────────────────────────────────────────────

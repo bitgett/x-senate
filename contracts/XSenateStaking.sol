@@ -512,13 +512,10 @@ contract XSenateStaking {
 
         p.accReward = 0;
 
-        // Pay delegator 100% from reward pool (or mint)
-        if (reward <= epochRewardPool[currentEpoch]) {
-            epochRewardPool[currentEpoch] -= reward;
-            require(xToken.transfer(msg.sender, reward), "Staking: transfer failed");
-        } else {
-            xToken.mint(msg.sender, reward);
-        }
+        // Pay from reward pool only — no mint fallback (prevents unbounded token inflation)
+        require(reward <= epochRewardPool[currentEpoch], "Staking: reward pool depleted for this epoch");
+        epochRewardPool[currentEpoch] -= reward;
+        require(xToken.transfer(msg.sender, reward), "Staking: transfer failed");
 
         // If delegated to a User Agent, accrue 3% creator reward from ecosystem fund
         if (bytes(p.delegatedAgent).length > 0) {
