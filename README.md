@@ -266,6 +266,14 @@ The following security controls were implemented and are live in production:
 | SEC-02 | Payment tx hash replay protection — `used_payment_hashes` table with `PRIMARY KEY` on `tx_hash`. Hash recorded atomically before action completes. Same tx hash rejected with HTTP 402 on reuse. | `lib/db.ts`, `proposals/submit/route.ts`, `uga/register/route.ts` |
 | SEC-04 | `DELETE /api/proposals/[id]` requires `x-admin-secret` header matching `ADMIN_SECRET` env var. Returns 401 without it. | `proposals/[id]/route.ts` |
 | Rate Limit | IP-based rate limiting on all Claude-calling routes: Sentinel scan (3/min), Senate review (5/min), Debate stream (5/min), Proposal submit (10/min). | `lib/rateLimit.ts` |
+| P1-TxVerify | Registry POST verifies `tx_hash` on-chain via `eth_getTransactionReceipt` before writing project metadata. Status `0x1` required — failed txs are rejected. | `api/registry/projects/route.ts` |
+| P1-ProjectId | `project_id` validated against DB + on-chain registry before creating any proposal or sentinel scan. Unknown project IDs rejected with HTTP 400. | `api/proposals/submit/route.ts`, `api/proposals/sentinel/scan/route.ts` |
+| P2-PayRetry | Payment tx hash persisted in UI state across modal close. If AI review fails after payment, user retries submission without paying twice. Cleared only on successful save. | `app/projects/[projectId]/page.tsx` |
+| P2-StaleLease | Stale `In_Senate` (>90s) auto-reset to `Draft`. Stale `In_Debate` (>90s, no turns saved) auto-reset to `Approved`. Prevents permanently stuck proposals if a serverless function times out. | `api/senate/review/[id]/route.ts`, `api/debate/stream/[id]/route.ts` |
+
+### X Layer Web3 Notes
+
+X Layer (chainId 196) has no ENS registry. All on-chain reads use `ethers.JsonRpcProvider` directly. All writes use raw EIP-1193 `eth_sendTransaction` via the connected wallet — no `BrowserProvider` involved, which eliminates ENS resolution errors. Explicit gas (`250,000`) is passed to prevent wallet-side `eth_estimateGas` calls that can produce misleading errors on simulation failure.
 
 ### Known Limitations (Out of Scope for Hackathon)
 
@@ -290,12 +298,14 @@ cp .env.local.example .env.local
 #   OKX_SECRET_KEY=...
 #   OKX_PASSPHRASE=...
 #   ADMIN_SECRET=...              (any strong secret — protects DELETE /api/proposals/[id])
-# Optional (defaults to mainnet addresses):
+# Optional (defaults to mainnet addresses below — no need to set unless overriding):
 #   NEXT_PUBLIC_XSEN_STAKING_ADDRESS=0xc8FD7B12De6bFb10dF3eaCb38AAc09CBbeb25bFD
 #   NEXT_PUBLIC_XSEN_TOKEN_ADDRESS=0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b
 #   NEXT_PUBLIC_XSEN_REGISTRY_ADDRESS=0x111bC1681fc34EAcab66f75D8273C4ECD49b13e5
 npm run dev
 ```
+
+> **Vercel env var note:** When setting `NEXT_PUBLIC_*` contract addresses in Vercel, paste values without trailing newlines. A stray `\n` in the value makes ethers.js reject the address as invalid at runtime. All address constants use `safeAddr()` (`.trim()` + `ethers.getAddress()` with fallback) as a defensive measure, but clean input is preferred.
 
 **Redeploy contracts (upgrade only — keeps XToken):**
 ```bash
