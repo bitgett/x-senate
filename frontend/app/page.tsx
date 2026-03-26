@@ -191,93 +191,133 @@ export default function LandingPage() {
       <div className="fixed bottom-[-10%] left-[30%] w-[400px] h-[400px] rounded-full bg-indigo-900/15 blur-[100px] pointer-events-none z-0" />
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <section className="relative z-10 min-h-screen flex flex-col items-center justify-center text-center px-6 py-24">
-        {/* Live indicator */}
-        <div
-          style={{
-            opacity: heroVisible ? 1 : 0,
-            transform: heroVisible ? "translateY(0)" : "translateY(-12px)",
-            transition: "opacity 0.6s ease, transform 0.6s ease",
-          }}
-          className="mb-8 inline-flex items-center gap-2 bg-gray-900/70 border border-gray-700/60 rounded-full px-4 py-1.5 text-sm text-gray-400 backdrop-blur"
-        >
-          <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-          Live on X Layer · chainId 196
-        </div>
+      <section className="relative z-10 min-h-screen flex items-center px-6 py-24">
+        <div className="max-w-6xl mx-auto w-full grid md:grid-cols-2 gap-12 md:gap-16 items-center">
 
-        {/* Title */}
-        <div
-          style={{
-            opacity: heroVisible ? 1 : 0,
-            transform: heroVisible ? "translateY(0)" : "translateY(20px)",
-            transition: "opacity 0.8s ease 0.1s, transform 0.8s ease 0.1s",
-          }}
-        >
-          <h1 className="text-7xl md:text-9xl font-black tracking-tight mb-6 leading-none">
-            <span
-              style={{
-                backgroundImage: "linear-gradient(135deg, #fff 0%, #c4b5fd 40%, #93c5fd 80%, #fff 100%)",
-                backgroundSize: "200% auto",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                backgroundClip: "text",
-                animation: "gradientShift 4s linear infinite",
-              }}
-            >
-              X-Senate
-            </span>
-          </h1>
-        </div>
+          {/* Left — main copy */}
+          <div
+            style={{
+              opacity: heroVisible ? 1 : 0,
+              transform: heroVisible ? "translateY(0)" : "translateY(20px)",
+              transition: "opacity 0.8s ease 0.1s, transform 0.8s ease 0.1s",
+            }}
+          >
+            {/* Live indicator */}
+            <div className="mb-8 inline-flex items-center gap-2 bg-gray-900/70 border border-gray-700/60 rounded-full px-4 py-1.5 text-sm text-gray-400 backdrop-blur">
+              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+              Live on X Layer · chainId 196
+            </div>
 
-        <div
-          style={{
-            opacity: heroVisible ? 1 : 0,
-            transform: heroVisible ? "translateY(0)" : "translateY(20px)",
-            transition: "opacity 0.8s ease 0.25s, transform 0.8s ease 0.25s",
-          }}
-        >
-          <p className="text-xl md:text-2xl text-gray-400 max-w-2xl mb-3 leading-relaxed">
-            The AI governance layer for X Layer.
-          </p>
-          <p className="text-2xl md:text-3xl font-semibold text-white max-w-2xl mb-4 leading-relaxed">
-            Five AI agents. One senate. Every project.
-          </p>
-          <p className="text-gray-500 max-w-xl mb-12 text-base leading-relaxed">
-            Any ERC20 project on X Layer can plug into X-Senate's permissionless governance infrastructure —
-            AI-powered proposal review, live senate debate, and on-chain execution.
-          </p>
-        </div>
+            <h1 className="text-6xl md:text-8xl font-black tracking-tight mb-6 leading-none">
+              <span
+                style={{
+                  backgroundImage: "linear-gradient(135deg, #fff 0%, #c4b5fd 40%, #93c5fd 80%, #fff 100%)",
+                  backgroundSize: "200% auto",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                  animation: "gradientShift 4s linear infinite",
+                }}
+              >
+                X-Senate
+              </span>
+            </h1>
 
-        <div
-          style={{
-            opacity: heroVisible ? 1 : 0,
-            transform: heroVisible ? "translateY(0)" : "translateY(20px)",
-            transition: "opacity 0.8s ease 0.4s, transform 0.8s ease 0.4s",
-          }}
-          className="flex flex-wrap justify-center gap-4"
-        >
-          <Link
-            href="/app"
-            className="relative group bg-purple-600 hover:bg-purple-500 text-white font-bold px-8 py-3.5 rounded-full text-base transition-all duration-300 hover:scale-105 overflow-hidden"
-            style={{ boxShadow: "0 0 30px rgba(139,92,246,0.4)" }}
+            <p className="text-lg text-gray-400 mb-2 leading-relaxed">
+              The AI governance layer for X Layer.
+            </p>
+            <p className="text-xl md:text-2xl font-semibold text-white mb-4 leading-relaxed">
+              Five AI agents. One senate. Every project.
+            </p>
+            <p className="text-gray-500 max-w-md mb-10 text-sm leading-relaxed">
+              Any ERC20 project on X Layer can plug into X-Senate's permissionless governance infrastructure —
+              AI-powered proposal review, live senate debate, and on-chain execution.
+            </p>
+
+            <div className="flex flex-wrap gap-4">
+              <Link
+                href="/app"
+                className="relative group bg-purple-600 hover:bg-purple-500 text-white font-bold px-8 py-3.5 rounded-full text-base transition-all duration-300 hover:scale-105 overflow-hidden"
+                style={{ boxShadow: "0 0 30px rgba(139,92,246,0.4)" }}
+              >
+                <span className="relative z-10">Launch App →</span>
+                <span className="absolute inset-0 bg-gradient-to-r from-purple-500 to-blue-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              </Link>
+              <Link
+                href="/stake"
+                className="border border-gray-600 hover:border-purple-500 text-gray-300 hover:text-white font-medium px-8 py-3.5 rounded-full text-base transition-all duration-300 hover:scale-105 backdrop-blur-sm"
+              >
+                Start Staking
+              </Link>
+              <a
+                href="https://github.com/bitgett/x-senate"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="border border-gray-800 hover:border-gray-500 text-gray-500 hover:text-gray-300 font-medium px-8 py-3.5 rounded-full text-base transition-all duration-300"
+              >
+                GitHub
+              </a>
+            </div>
+          </div>
+
+          {/* Right — Vitalik quote card */}
+          <div
+            style={{
+              opacity: heroVisible ? 1 : 0,
+              transform: heroVisible ? "translateY(0)" : "translateY(24px)",
+              transition: "opacity 0.9s ease 0.35s, transform 0.9s ease 0.35s",
+            }}
           >
-            <span className="relative z-10">Launch App →</span>
-            <span className="absolute inset-0 bg-gradient-to-r from-purple-500 to-blue-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          </Link>
-          <Link
-            href="/stake"
-            className="border border-gray-600 hover:border-purple-500 text-gray-300 hover:text-white font-medium px-8 py-3.5 rounded-full text-base transition-all duration-300 hover:scale-105 backdrop-blur-sm"
-          >
-            Start Staking
-          </Link>
-          <a
-            href="https://github.com/bitgett/x-senate"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="border border-gray-800 hover:border-gray-500 text-gray-500 hover:text-gray-300 font-medium px-8 py-3.5 rounded-full text-base transition-all duration-300"
-          >
-            GitHub
-          </a>
+            <div className="rounded-2xl border border-gray-700/50 bg-gray-900/50 backdrop-blur-sm p-7 relative overflow-hidden">
+              {/* Top accent line */}
+              <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-purple-500/50 to-transparent" />
+
+              {/* Large quote mark */}
+              <div className="text-5xl font-black text-gray-800 leading-none mb-1 select-none">"</div>
+
+              <p className="text-gray-200 text-base leading-relaxed mb-3">
+                AI used well can be empowering, and push the frontier of democratic / decentralized modes of governance.
+              </p>
+              <p className="text-gray-400 text-sm leading-relaxed mb-3">
+                The core problem with DAOs is limits to human attention. The usual solution — delegation — is disempowering.
+                So what can we do?{" "}
+                <span className="text-purple-300 font-medium">We use personal LLMs to solve the attention problem.</span>
+              </p>
+              <p className="text-gray-500 text-sm leading-relaxed">
+                A personal agent can perform all the necessary votes for you, based on preferences that it infers from your
+                personal writing, conversation history, direct statements, etc.
+              </p>
+
+              {/* Attribution */}
+              <div className="flex items-center gap-3 mt-6 pt-5 border-t border-gray-800/60">
+                <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0 bg-gray-700 flex items-center justify-center">
+                  <img
+                    src="/vitalik.png"
+                    alt="Vitalik Buterin"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      const img = e.target as HTMLImageElement;
+                      img.style.display = "none";
+                      if (img.parentElement) img.parentElement.innerHTML = '<span style="color:#9ca3af;font-size:11px;font-weight:700">VB</span>';
+                    }}
+                  />
+                </div>
+                <div className="flex-1">
+                  <div className="text-white font-semibold text-sm">Vitalik Buterin</div>
+                  <div className="text-gray-500 text-xs">@VitalikButerin · Feb 22, 2026</div>
+                </div>
+                <a
+                  href="https://x.com/VitalikButerin"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-gray-600 hover:text-purple-400 transition-colors border border-gray-800 hover:border-purple-700/60 rounded-full px-3 py-1 whitespace-nowrap"
+                >
+                  View ↗
+                </a>
+              </div>
+            </div>
+          </div>
+
         </div>
 
         {/* Scroll indicator */}
@@ -293,54 +333,6 @@ export default function LandingPage() {
           <svg width="16" height="20" viewBox="0 0 16 20" fill="none">
             <path d="M8 2v16M2 12l6 6 6-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
-        </div>
-      </section>
-
-      {/* ── Vitalik Quote ────────────────────────────────────────────────── */}
-      <section className="relative z-10 py-24 px-6 border-t border-gray-800/40">
-        <div className="max-w-3xl mx-auto">
-          <Reveal>
-            <div className="rounded-2xl border border-gray-700/60 bg-gray-900/40 backdrop-blur-sm p-8 md:p-10 relative overflow-hidden">
-              {/* Subtle glow */}
-              <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-purple-500/40 to-transparent" />
-
-              {/* Quote mark */}
-              <div className="text-6xl font-black text-gray-800 leading-none mb-2 select-none">"</div>
-
-              {/* Quote text */}
-              <p className="text-lg md:text-xl text-gray-300 leading-relaxed mb-4">
-                AI used well can be empowering, and push the frontier of democratic / decentralized modes of governance.
-              </p>
-              <p className="text-gray-400 text-base leading-relaxed mb-4">
-                The core problem with DAOs is limits to human attention: thousands of decisions, many domains of expertise, and most people don't have time to be experts. The usual solution — delegation — is disempowering. So what can we do?{" "}
-                <span className="text-purple-300 font-semibold">We use personal LLMs to solve the attention problem.</span>
-              </p>
-              <p className="text-gray-400 text-base leading-relaxed">
-                If a governance mechanism depends on you to make a large number of decisions, a personal agent can perform all the necessary votes for you, based on preferences that it infers from your personal writing, conversation history, direct statements, etc.
-              </p>
-
-              {/* Attribution */}
-              <div className="flex items-center gap-3 mt-8 pt-6 border-t border-gray-800/60">
-                <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0">
-                  {/* Replace src with /vitalik.jpg once you add the image to public/ */}
-                  <img src="/vitalik.jpg" alt="Vitalik Buterin" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                  <span className="text-gray-400 text-xs font-bold absolute">VB</span>
-                </div>
-                <div>
-                  <div className="text-white font-semibold text-sm">Vitalik Buterin</div>
-                  <div className="text-gray-500 text-xs">@VitalikButerin · Feb 22, 2025</div>
-                </div>
-                <a
-                  href="https://x.com/VitalikButerin/status/1893005590225973355"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="ml-auto text-xs text-gray-600 hover:text-purple-400 transition-colors border border-gray-800 hover:border-purple-700 rounded-full px-3 py-1"
-                >
-                  View post ↗
-                </a>
-              </div>
-            </div>
-          </Reveal>
         </div>
       </section>
 
