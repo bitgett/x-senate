@@ -44,6 +44,10 @@ export default function ProjectPage() {
   const [submitting,   setSubmitting]   = useState(false);
   const [subError,     setSubError]     = useState("");
 
+  // Sentinel
+  const [runningSentinel, setRunningSentinel] = useState(false);
+  const [sentinelResult,  setSentinelResult]  = useState<any>(null);
+
   useEffect(() => {
     if (!projectId) return;
     Promise.all([
@@ -98,6 +102,28 @@ export default function ProjectPage() {
     setSubmitting(false);
   }
 
+  async function handleRunSentinel() {
+    setRunningSentinel(true);
+    setSentinelResult(null);
+    try {
+      const res = await fetch("/api/proposals/sentinel/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_id: projectId }),
+      });
+      const data = await res.json();
+      setSentinelResult(data);
+      // Refresh proposals if a draft was saved
+      if (data.saved_proposal_id) {
+        const updated = await fetch(`/api/proposals?project_id=${projectId}`).then(r => r.ok ? r.json() : []);
+        setProposals(Array.isArray(updated) ? updated : (updated?.proposals ?? []));
+      }
+    } catch (e: any) {
+      setSentinelResult({ error: e.message ?? "Sentinel scan failed" });
+    }
+    setRunningSentinel(false);
+  }
+
   if (loading) return <div className="flex items-center justify-center min-h-64 text-gray-500">Loading project...</div>;
 
   if (notFound) return (
@@ -126,6 +152,13 @@ export default function ProjectPage() {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-1 flex-wrap">
+              {project?.logo_base64 ? (
+                <img src={project.logo_base64} alt={project.project_id} className="w-12 h-12 rounded-xl object-cover shrink-0" />
+              ) : (
+                <div className="w-12 h-12 rounded-xl bg-gray-800 flex items-center justify-center text-2xl shrink-0">
+                  {project?.project_id === "XSEN" ? "🏛️" : "🔷"}
+                </div>
+              )}
               <h1 className="text-3xl font-bold text-white">{project?.name}</h1>
               <span className="text-sm bg-gray-800 text-gray-300 rounded-full px-3 py-0.5 font-mono">{project?.project_id}</span>
               {project?.project_id === "XSEN" && (
@@ -163,7 +196,6 @@ export default function ProjectPage() {
             )}
           </div>
           <div className="flex flex-col items-end gap-2">
-            <span className="text-4xl">{project?.project_id === "XSEN" ? "🏛️" : "🔷"}</span>
             <button
               onClick={() => wallet ? setShowSubmit(true) : openModal()}
               className="bg-purple-600 hover:bg-purple-500 text-white font-semibold px-4 py-2 rounded-full text-sm transition-colors"
@@ -193,6 +225,44 @@ export default function ProjectPage() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Sentinel Scanner */}
+      <div className="border border-gray-800/60 rounded-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm">🔍</span>
+            <span className="text-sm font-semibold text-white">Sentinel Scanner</span>
+            <span className="text-xs text-gray-500">AI-powered proposal discovery</span>
+          </div>
+          <button
+            onClick={handleRunSentinel}
+            disabled={runningSentinel}
+            className="bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-semibold text-xs px-4 py-1.5 rounded-full transition-colors"
+          >
+            {runningSentinel ? "Scanning..." : "Run Sentinel"}
+          </button>
+        </div>
+        {runningSentinel && (
+          <div className="flex items-center gap-2 text-xs text-orange-300 bg-orange-900/20 border border-orange-700/30 rounded-lg p-3">
+            <div className="w-3 h-3 rounded-full border-2 border-orange-400 border-t-transparent animate-spin shrink-0" />
+            Sentinel is scanning community signals and generating a draft proposal... (may take up to 30s)
+          </div>
+        )}
+        {sentinelResult && !runningSentinel && (
+          <div className={`text-xs rounded-lg p-3 ${sentinelResult.error
+            ? "bg-red-900/20 border border-red-700/30 text-red-400"
+            : "bg-green-900/20 border border-green-700/30 text-green-400"
+          }`}>
+            {sentinelResult.error ? (
+              <span>Scan failed: {sentinelResult.error}</span>
+            ) : sentinelResult.saved_proposal_id ? (
+              <span>Draft proposal created: <a href={`/proposals/${sentinelResult.saved_proposal_id}`} className="underline font-mono">{sentinelResult.saved_proposal_id}</a></span>
+            ) : (
+              <span>Scan complete — {sentinelResult.summary ?? "no actionable signals found"}</span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Staking stats */}

@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
   try {
     await initSchema().catch(() => {});
     const body = await req.json();
-    const { project_id, name, description, token_address, twitter, discord, telegram, registrant, tx_hash } = body;
+    const { project_id, name, description, token_address, twitter, discord, telegram, registrant, tx_hash, logo_base64 } = body;
 
     if (!project_id?.trim()) return NextResponse.json({ detail: "project_id required" }, { status: 400 });
     if (!name?.trim())       return NextResponse.json({ detail: "name required" }, { status: 400 });
@@ -82,6 +82,7 @@ export async function POST(req: NextRequest) {
       telegram:      telegram?.trim() || null,
       registrant:    registrant?.trim() || null,
       tx_hash:       tx_hash?.trim() || null,
+      logo_base64:   logo_base64 || null,
     });
 
     return NextResponse.json({

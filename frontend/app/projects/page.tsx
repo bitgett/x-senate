@@ -34,6 +34,7 @@ export default function ProjectsPage() {
   const [formTwitter,     setFormTwitter]     = useState("");
   const [formDiscord,     setFormDiscord]     = useState("");
   const [formTelegram,    setFormTelegram]    = useState("");
+  const [logoBase64,      setLogoBase64]      = useState<string | null>(null);
 
   // Registration state
   const [step,      setStep]      = useState<RegStep>("idle");
@@ -109,6 +110,7 @@ export default function ProjectsPage() {
           telegram:      formTelegram.trim() || null,
           registrant:    wallet,
           tx_hash:       registerTx.hash,
+          logo_base64:   logoBase64 || null,
         }),
       });
 
@@ -205,16 +207,24 @@ export default function ProjectsPage() {
             <Link key={p.project_id} href={`/projects/${p.project_id}`}>
               <div className="bg-gray-900 border border-gray-800 hover:border-purple-600 rounded-xl p-5 transition-all cursor-pointer h-full flex flex-col">
                 <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-white text-lg">{p.project_id}</span>
-                      {p.project_id === "XSEN" && (
-                        <span className="text-[10px] bg-purple-800 text-purple-200 rounded-full px-2 py-0.5">Native</span>
-                      )}
+                  <div className="flex items-center gap-3">
+                    {p.logo_base64 ? (
+                      <img src={p.logo_base64} alt={p.project_id} className="w-10 h-10 rounded-xl object-cover shrink-0" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-xl bg-gray-800 flex items-center justify-center text-lg shrink-0">
+                        {p.project_id === "XSEN" ? "🏛️" : "🔷"}
+                      </div>
+                    )}
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-white text-lg">{p.project_id}</span>
+                        {p.project_id === "XSEN" && (
+                          <span className="text-[10px] bg-purple-800 text-purple-200 rounded-full px-2 py-0.5">Native</span>
+                        )}
+                      </div>
+                      <div className="text-gray-400 text-sm">{p.name}</div>
                     </div>
-                    <div className="text-gray-400 text-sm">{p.name}</div>
                   </div>
-                  <span className="text-2xl">{p.project_id === "XSEN" ? "🏛️" : "🔷"}</span>
                 </div>
                 {p.description && (
                   <p className="text-xs text-gray-500 mb-2 line-clamp-2">{p.description}</p>
@@ -275,6 +285,46 @@ export default function ProjectsPage() {
               onChange={e => setFormName(e.target.value)}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
             />
+          </div>
+
+          {/* Token Logo */}
+          <div>
+            <label className="text-xs text-gray-400 uppercase tracking-wide mb-1 block">Token Logo</label>
+            <div className="flex items-center gap-4">
+              {logoBase64 ? (
+                <img src={logoBase64} alt="logo" className="w-16 h-16 rounded-xl object-cover border border-gray-700" />
+              ) : (
+                <div className="w-16 h-16 rounded-xl bg-gray-800 border border-dashed border-gray-600 flex items-center justify-center text-gray-600 text-xs">
+                  200x200
+                </div>
+              )}
+              <div className="flex-1">
+                <label className="cursor-pointer inline-block bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-xs px-4 py-2 rounded-lg transition-colors">
+                  {logoBase64 ? "Change Logo" : "Upload Logo"}
+                  <input type="file" accept="image/*" className="hidden" onChange={e => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 500_000) { setRegError("Image too large. Max 500KB."); return; }
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      const img = new window.Image();
+                      img.onload = () => {
+                        const canvas = document.createElement("canvas");
+                        canvas.width = 200; canvas.height = 200;
+                        const ctx = canvas.getContext("2d")!;
+                        const scale = Math.max(200 / img.width, 200 / img.height);
+                        const w = img.width * scale, h = img.height * scale;
+                        ctx.drawImage(img, (200 - w) / 2, (200 - h) / 2, w, h);
+                        setLogoBase64(canvas.toDataURL("image/jpeg", 0.85));
+                      };
+                      img.src = reader.result as string;
+                    };
+                    reader.readAsDataURL(file);
+                  }} />
+                </label>
+                <p className="text-xs text-gray-600 mt-1">PNG/JPG, max 500KB. Resized to 200×200</p>
+              </div>
+            </div>
           </div>
 
           {/* Description */}

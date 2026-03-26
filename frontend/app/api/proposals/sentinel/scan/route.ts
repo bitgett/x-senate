@@ -4,15 +4,17 @@ import { dbCreateProposal, initSchema } from "@/lib/db";
 
 export const maxDuration = 60; // Vercel Pro: allow up to 60s for Claude
 
-export async function POST(_: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
     await initSchema();
+    const body = await req.json().catch(() => ({}));
+    const projectId = body?.project_id ?? "XSEN";
     const result = await runSentinelScan();
 
     if (result.draft_proposal) {
       const draft = result.draft_proposal as Record<string, string>;
       const proposal = await dbCreateProposal({
-        project_id: "XSEN",
+        project_id: projectId,
         title: draft.title ?? "Untitled",
         summary: draft.summary ?? "",
         motivation: draft.motivation ?? null,

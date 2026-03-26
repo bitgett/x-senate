@@ -131,9 +131,11 @@ export async function initSchema() {
       telegram      TEXT,
       registrant    TEXT,
       tx_hash       TEXT,
+      logo_base64   TEXT,
       created_at    TIMESTAMPTZ DEFAULT NOW()
     )
   `;
+  await sql`ALTER TABLE projects_meta ADD COLUMN IF NOT EXISTS logo_base64 TEXT`;
 }
 
 // ─── Projects Meta ───────────────────────────────────────────────────────────
@@ -148,6 +150,7 @@ export interface ProjectMetaRow {
   telegram: string | null;
   registrant: string | null;
   tx_hash: string | null;
+  logo_base64: string | null;
   created_at: string;
 }
 
@@ -155,20 +158,23 @@ export async function dbUpsertProjectMeta(data: {
   project_id: string; name: string; description?: string;
   token_address?: string; twitter?: string; discord?: string;
   telegram?: string; registrant?: string; tx_hash?: string;
+  logo_base64?: string;
 }): Promise<void> {
   const sql = getSql();
   await sql`
-    INSERT INTO projects_meta (project_id, name, description, token_address, twitter, discord, telegram, registrant, tx_hash)
+    INSERT INTO projects_meta (project_id, name, description, token_address, twitter, discord, telegram, registrant, tx_hash, logo_base64)
     VALUES (
       ${data.project_id}, ${data.name}, ${data.description ?? null},
       ${data.token_address ?? null}, ${data.twitter ?? null},
       ${data.discord ?? null}, ${data.telegram ?? null},
-      ${data.registrant ?? null}, ${data.tx_hash ?? null}
+      ${data.registrant ?? null}, ${data.tx_hash ?? null},
+      ${data.logo_base64 ?? null}
     )
     ON CONFLICT (project_id) DO UPDATE SET
       name = EXCLUDED.name, description = EXCLUDED.description,
       twitter = EXCLUDED.twitter, discord = EXCLUDED.discord,
-      telegram = EXCLUDED.telegram, tx_hash = COALESCE(EXCLUDED.tx_hash, projects_meta.tx_hash)
+      telegram = EXCLUDED.telegram, tx_hash = COALESCE(EXCLUDED.tx_hash, projects_meta.tx_hash),
+      logo_base64 = COALESCE(EXCLUDED.logo_base64, projects_meta.logo_base64)
   `;
 }
 
