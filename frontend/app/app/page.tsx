@@ -417,23 +417,21 @@ export default function GovernancePage() {
                       setSubmitPayStep("paying");
 
                       // Step 2: Pay XSEN to treasury
-                      const TOKEN_ABI = ["function transfer(address to, uint256 amount) returns (bool)"];
-                      const provider = new ethers.BrowserProvider(rawProvider(), { chainId: 196, name: "xlayer" });
-                      const signer = await provider.getSigner();
-                      const token = new ethers.Contract(quote.xsen_token, TOKEN_ABI, signer);
-                      const payTx = await token.transfer(quote.treasury, BigInt(quote.xsen_amount_wei));
+                      const TOKEN_TRANSFER_IFACE = new ethers.Interface(["function transfer(address to, uint256 amount) returns (bool)"]);
+                      const payTxHash = await sendTx(rawProvider(), wallet!, quote.xsen_token,
+                        TOKEN_TRANSFER_IFACE.encodeFunctionData("transfer", [quote.treasury, BigInt(quote.xsen_amount_wei)]));
                       setSubmitPayStep("verifying");
-                      await payTx.wait();
+                      await waitTx(payTxHash);
 
                       // Step 3: Submit proposal with payment proof
                       setSubmitPayStep("done");
                       const res = await fetch("/api/proposals/submit", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ ...form, submitter_address: wallet ?? undefined, payment_tx_hash: payTx.hash }),
+                        body: JSON.stringify({ ...form, submitter_address: wallet ?? undefined, payment_tx_hash: payTxHash }),
                       });
                       const data = await res.json();
-                      setSubmitResult({ ...data, status: res.status, payment_tx: payTx.hash });
+                      setSubmitResult({ ...data, status: res.status, payment_tx: payTxHash });
                       if (res.status === 201) { const updated = await fetchProposals(); setProposals(updated); }
                     } catch (e: any) {
                       setSubmitResult({ approved: false, feedback: e.message?.slice(0, 120) ?? "Error" });

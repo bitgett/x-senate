@@ -7,10 +7,24 @@ import { useWallet } from "@/contexts/WalletContext";
 
 const REGISTRY_ADDRESS = process.env.NEXT_PUBLIC_XSEN_REGISTRY_ADDRESS  ?? "0xFd11e955CCEA6346911F33119B3bf84b3f0E6678";
 const XSEN_TOKEN       = process.env.NEXT_PUBLIC_XSEN_TOKEN_ADDRESS      ?? "0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b";
-const XSEN_STAKING     = process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS    ?? "0x9CD9eF69c4EE176c8115E4BCf6c604Eb46599502";
+const XSEN_STAKING     = process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS    ?? "0xc8FD7B12De6bFb10dF3eaCb38AAc09CBbeb25bFD";
 
 const TOKEN_ABI    = ["function balanceOf(address) view returns (uint256)", "function approve(address,uint256) returns (bool)"];
 const REGISTRY_ABI = ["function registerProject(string,string,address,address) external"];
+const TOKEN_IFACE    = new ethers.Interface(TOKEN_ABI);
+const REGISTRY_IFACE = new ethers.Interface(REGISTRY_ABI);
+const RPC_PROVIDER   = new ethers.JsonRpcProvider("https://rpc.xlayer.tech");
+async function sendTx(rawProv: any, from: string, to: string, data: string): Promise<string> {
+  return await rawProv.request({ method: "eth_sendTransaction", params: [{ from, to, data }] });
+}
+async function waitTx(hash: string): Promise<void> {
+  for (let i = 0; i < 60; i++) {
+    const r = await RPC_PROVIDER.getTransactionReceipt(hash).catch(() => null);
+    if (r) return;
+    await new Promise(res => setTimeout(res, 2000));
+  }
+  throw new Error("Transaction not confirmed after 2 minutes");
+}
 
 function truncateAddr(addr: string) {
   if (!addr || addr.length < 10) return addr;
@@ -71,12 +85,11 @@ export default function ProjectsPage() {
     const pid = formId.trim().toUpperCase();
 
     try {
-      const provider = new ethers.BrowserProvider(rawProvider());
-      const signer   = await provider.getSigner();
-      const token    = new ethers.Contract(XSEN_TOKEN, TOKEN_ABI, signer);
+      const raw = rawProvider();
 
       // Step 1: Check XSEN balance
       setStep("checking");
+      const token = new ethers.Contract(XSEN_TOKEN, TOKEN_ABI, RPC_PROVIDER);
       const bal = await token.balanceOf(wallet);
       const fee = ethers.parseEther("1000");
       if (bal < fee) {
@@ -86,14 +99,15 @@ export default function ProjectsPage() {
 
       // Step 2: Approve Registry to spend 1000 XSEN
       setStep("approving");
-      const approveTx = await token.approve(REGISTRY_ADDRESS, fee);
-      await approveTx.wait();
+      const approveHash = await sendTx(raw, wallet, XSEN_TOKEN,
+        TOKEN_IFACE.encodeFunctionData("approve", [REGISTRY_ADDRESS, fee]));
+      await waitTx(approveHash);
 
       // Step 3: Call Registry.registerProject on-chain
       setStep("registering");
-      const registry  = new ethers.Contract(REGISTRY_ADDRESS, REGISTRY_ABI, signer);
-      const registerTx = await registry.registerProject(pid, formName.trim(), formToken.trim(), XSEN_STAKING);
-      await registerTx.wait();
+      const registerHash = await sendTx(raw, wallet, REGISTRY_ADDRESS,
+        REGISTRY_IFACE.encodeFunctionData("registerProject", [pid, formName.trim(), formToken.trim(), XSEN_STAKING]));
+      await waitTx(registerHash);
 
       // Step 4: Save social meta to DB
       setStep("saving");
@@ -109,13 +123,13 @@ export default function ProjectsPage() {
           discord:       formDiscord.trim() || null,
           telegram:      formTelegram.trim() || null,
           registrant:    wallet,
-          tx_hash:       registerTx.hash,
+          tx_hash:       registerHash,
           logo_base64:   logoBase64 || null,
         }),
       });
 
       setStep("done");
-      setRegResult({ project_id: pid, tx_hash: registerTx.hash });
+      setRegResult({ project_id: pid, tx_hash: registerHash });
       // Reload project list
       fetch("/api/registry/projects").then(r => r.json()).then(d => { if (d.projects) setProjects(d.projects); });
       // Navigate to new project page after 2s
