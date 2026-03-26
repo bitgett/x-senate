@@ -799,42 +799,6 @@ export default function StakePage() {
                   )}
                 </div>
 
-                {/* Leaderboard */}
-                <div>
-                  <h2 className="text-sm font-semibold text-gray-400 mb-3 tracking-wider uppercase">Agent Leaderboard</h2>
-                  <div className="border border-gray-800/60 rounded-xl overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-800 text-xs text-gray-600 text-left bg-gray-900/30">
-                          <th className="px-4 py-3 w-16">Rank</th>
-                          <th className="px-4 py-3">Agent</th>
-                          <th className="px-4 py-3 text-right">Delegated VP</th>
-                          <th className="px-4 py-3 text-right">Delegators</th>
-                          <th className="px-4 py-3 text-right">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {leaderboard.map((a: any) => (
-                          <tr key={a.agent_name} className="border-b border-gray-800/30 hover:bg-gray-800/20 transition-colors">
-                            <td className="px-4 py-3 text-xs font-bold text-gray-500">{a.rank_label}</td>
-                            <td className="px-4 py-3">
-                              <span className="font-semibold text-white">{a.agent_name}</span>
-                              {a.is_genesis && <span className="ml-2 text-[10px] text-purple-400 bg-purple-900/20 rounded-full px-1.5 py-0.5">Genesis</span>}
-                            </td>
-                            <td className="px-4 py-3 text-right font-mono text-purple-300">{fmt(a.total_delegated_vp_xsen)}</td>
-                            <td className="px-4 py-3 text-right text-gray-400">{a.delegator_count}</td>
-                            <td className="px-4 py-3 text-right">
-                              {a.voted_this_epoch
-                                ? <span className="text-xs text-green-400 bg-green-900/20 rounded-full px-2 py-0.5">Active</span>
-                                : <span className="text-xs text-gray-700">—</span>}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
                 {/* Wallet Portfolio */}
                 <div className="border border-gray-800/60 rounded-2xl overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-800/40 flex items-center justify-between">
