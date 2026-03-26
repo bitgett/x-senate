@@ -602,7 +602,7 @@ export default function StakePage() {
                         const stakedAt = p.stakedAt > 0 ? new Date(p.stakedAt * 1000) : null;
 
                         return (
-                          <div key={p.id} className={`border rounded-xl p-4 ${p.active ? "border-gray-700 bg-gray-900/40" : "border-gray-800 opacity-40"}`}>
+                          <div key={p.id} className={`border rounded-xl p-4 flex flex-col ${p.active ? "border-gray-700 bg-gray-900/40" : "border-gray-800 opacity-40"}`}>
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-xs text-gray-600">Position #{p.id}</span>
                               <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${TIER_INFO[p.tierId]?.badge ?? "bg-gray-700 text-gray-300"}`}>{p.tier}</span>
@@ -635,7 +635,7 @@ export default function StakePage() {
 
                             {/* Unstake button / cooldown state */}
                             {p.active && (
-                              <div className="mt-3">
+                              <div className="mt-auto pt-3">
                                 {p.tierId === 0 ? (
                                   /* Flexible: instant unstake anytime, no cooldown */
                                   <button

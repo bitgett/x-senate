@@ -3,7 +3,7 @@
  * Client connects via GET and receives Server-Sent Events.
  */
 import { NextRequest } from "next/server";
-import { dbGetProposal, dbSaveDebateTurn, dbUpdateProposal } from "@/lib/db";
+import { dbGetProposal, dbGetDebateTurns, dbSaveDebateTurn, dbUpdateProposal } from "@/lib/db";
 import { runRelayDebate } from "@/lib/agents";
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -15,6 +15,24 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   }
   if (proposal.status !== "In_Debate") {
     return new Response(JSON.stringify({ error: `Proposal must be In_Debate status, got: ${proposal.status}` }), { status: 400 });
+  }
+
+  // If debate turns already exist, replay them without re-running AI
+  const existingTurns = await dbGetDebateTurns(id);
+  if (existingTurns.length > 0) {
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        const send = (data: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+        for (const turn of existingTurns) {
+          send({ type: "turn_end", agent_name: turn.agent_name, turn_order: turn.turn_order, full_argument: turn.full_argument, one_liner: turn.one_liner });
+        }
+        const oneLiners = existingTurns.reduce((acc: Record<string, string>, t) => { if (t.one_liner) acc[t.agent_name] = t.one_liner; return acc; }, {});
+        send({ type: "summary", one_liners: oneLiners });
+        controller.close();
+      },
+    });
+    return new Response(stream, { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive" } });
   }
 
   const proposalDict = {
