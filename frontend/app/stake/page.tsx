@@ -8,7 +8,7 @@ const TOKEN_ADDRESS   = process.env.NEXT_PUBLIC_XSEN_TOKEN_ADDRESS   ?? "0x1bAB7
 
 const STAKING_ABI = [
   "function getEffectiveVP(address user) view returns (uint256)",
-  "function getPositions(address user) view returns (tuple(uint256 id, uint256 amount, uint8 tier, uint256 lockEnd, string delegatedAgent, bool active, uint256 accReward)[])",
+  "function getUserPositions(address user) view returns (tuple(uint256 id, address owner, uint256 amount, uint8 tier, uint256 lockEnd, uint256 stakedAt, uint256 lastRewardAt, uint256 accReward, string delegatedAgent, bool active)[])",
   "function delegatePosition(uint256 positionId, string agentName) external",
   "function stake(uint256 amount, uint8 tier) external",
   "function unstake(uint256 positionId) external",
@@ -146,18 +146,19 @@ export default function StakePage() {
       setXsenBal(Number(ethers.formatEther(bal)));
       setVP(Number(ethers.formatEther(vp)));
       try {
-        const pos = await stk.getPositions(wallet);
+        const pos = await stk.getUserPositions(wallet);
         setPositions(pos.map((p: any) => ({
           id:             Number(p.id),
           amount:         Number(ethers.formatEther(p.amount)),
           tier:           TIER_INFO[Number(p.tier)]?.name ?? "Unknown",
           tierId:         Number(p.tier),
           lockEnd:        Number(p.lockEnd),
+          stakedAt:       Number(p.stakedAt),
           delegatedAgent: p.delegatedAgent,
           active:         p.active,
           accReward:      Number(ethers.formatEther(p.accReward)),
         })));
-      } catch { setPositions([]); }
+      } catch (e) { console.error("getPositions failed:", e); setPositions([]); }
     } catch (e) { console.error(e); }
   }, [wallet, walletType, rawProvider]);
 
@@ -598,11 +599,7 @@ export default function StakePage() {
                         const cooldownDone = cooldownEnd !== null && now >= cooldownEnd;
                         const remaining   = cooldownEnd ? cooldownEnd - now : 0;
 
-                        // Derive staked-at from lockEnd for locked tiers
-                        const tierDays = TIER_INFO[p.tierId]?.days ?? 0;
-                        const stakedAt = tierDays > 0 && p.lockEnd > 0
-                          ? new Date((p.lockEnd - tierDays * 86400) * 1000)
-                          : null;
+                        const stakedAt = p.stakedAt > 0 ? new Date(p.stakedAt * 1000) : null;
 
                         return (
                           <div key={p.id} className={`border rounded-xl p-4 ${p.active ? "border-gray-700 bg-gray-900/40" : "border-gray-800 opacity-40"}`}>

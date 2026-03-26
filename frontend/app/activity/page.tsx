@@ -8,7 +8,7 @@ const TOKEN_ADDRESS   = process.env.NEXT_PUBLIC_XSEN_TOKEN_ADDRESS   ?? "0x1bAB7
 
 const STAKING_ABI = [
   "function getEffectiveVP(address) view returns (uint256)",
-  "function getPositions(address) view returns (tuple(uint256 id, uint256 amount, uint8 tier, uint256 lockEnd, string delegatedAgent, bool active, uint256 accReward)[])",
+  "function getUserPositions(address) view returns (tuple(uint256 id, address owner, uint256 amount, uint8 tier, uint256 lockEnd, uint256 stakedAt, uint256 lastRewardAt, uint256 accReward, string delegatedAgent, bool active)[])",
 ];
 const TOKEN_ABI = ["function balanceOf(address) view returns (uint256)"];
 
@@ -75,7 +75,7 @@ export default function ActivityPage() {
       setXsenBal(Number(ethers.formatEther(bal)));
       setVP(Number(ethers.formatEther(vp)));
 
-      const pos = await staking.getPositions(addr).catch(() => []);
+      const pos = await staking.getUserPositions(addr).catch(() => []);
       setPositions(pos.map((p: any) => ({
         id: Number(p.id),
         amount: Number(ethers.formatEther(p.amount)),
