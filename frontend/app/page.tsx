@@ -160,7 +160,7 @@ const AGENTS = [
 const FEATURES = [
   { title: "AI-Native Governance",   desc: "Five specialized AI agents with distinct personalities analyze every proposal from security, economics, technical, diplomatic, and community angles." },
   { title: "Flash-Stake Protection",  desc: "Snapshot VP locks agent voting power at proposal creation. Staking or unstaking after a proposal goes live cannot affect the vote outcome." },
-  { title: "Multi-Tenant Platform",   desc: "Any ERC20 project on X Layer can register for 1,000 XSEN and immediately access the full AI governance stack. No development required." },
+  { title: "Multi-Tenant Platform",   desc: "Any ERC20 project on X Layer can register for $1 USDT and immediately access the full AI governance stack. No development required." },
   { title: "4-Tier Staking",          desc: "Flexible through 180-day lockups with 5–35% APY. Position-based rewards, VP multipliers up to 1.5x, and Proof of Participation enforcement." },
   { title: "User Agent Economy",      desc: "Build and register your own AI governance agent. Earn 3% creator rewards from every delegator — a new primitive for AI-powered passive income." },
   { title: "X Layer Native",          desc: "Built on OKX's EVM L2 with chainId 196. Low fees, high throughput, and full OnchainOS integration for market data, wallets, and contract analytics." },
@@ -296,13 +296,61 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Vitalik Quote ────────────────────────────────────────────────── */}
+      <section className="relative z-10 py-24 px-6 border-t border-gray-800/40">
+        <div className="max-w-3xl mx-auto">
+          <Reveal>
+            <div className="rounded-2xl border border-gray-700/60 bg-gray-900/40 backdrop-blur-sm p-8 md:p-10 relative overflow-hidden">
+              {/* Subtle glow */}
+              <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-purple-500/40 to-transparent" />
+
+              {/* Quote mark */}
+              <div className="text-6xl font-black text-gray-800 leading-none mb-2 select-none">"</div>
+
+              {/* Quote text */}
+              <p className="text-lg md:text-xl text-gray-300 leading-relaxed mb-4">
+                AI used well can be empowering, and push the frontier of democratic / decentralized modes of governance.
+              </p>
+              <p className="text-gray-400 text-base leading-relaxed mb-4">
+                The core problem with DAOs is limits to human attention: thousands of decisions, many domains of expertise, and most people don't have time to be experts. The usual solution — delegation — is disempowering. So what can we do?{" "}
+                <span className="text-purple-300 font-semibold">We use personal LLMs to solve the attention problem.</span>
+              </p>
+              <p className="text-gray-400 text-base leading-relaxed">
+                If a governance mechanism depends on you to make a large number of decisions, a personal agent can perform all the necessary votes for you, based on preferences that it infers from your personal writing, conversation history, direct statements, etc.
+              </p>
+
+              {/* Attribution */}
+              <div className="flex items-center gap-3 mt-8 pt-6 border-t border-gray-800/60">
+                <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0">
+                  {/* Replace src with /vitalik.jpg once you add the image to public/ */}
+                  <img src="/vitalik.jpg" alt="Vitalik Buterin" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                  <span className="text-gray-400 text-xs font-bold absolute">VB</span>
+                </div>
+                <div>
+                  <div className="text-white font-semibold text-sm">Vitalik Buterin</div>
+                  <div className="text-gray-500 text-xs">@VitalikButerin · Feb 22, 2025</div>
+                </div>
+                <a
+                  href="https://x.com/VitalikButerin/status/1893005590225973355"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-auto text-xs text-gray-600 hover:text-purple-400 transition-colors border border-gray-800 hover:border-purple-700 rounded-full px-3 py-1"
+                >
+                  View post ↗
+                </a>
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
       {/* ── Stats ────────────────────────────────────────────────────────── */}
       <section className="relative z-10 py-16 border-y border-gray-800/40">
         <div className="max-w-4xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
           {[
             { value: 5,    suffix: "",      label: "AI Senate Agents" },
             { value: 4,    suffix: " Tiers", label: "Staking Options" },
-            { value: 1000, suffix: " XSEN",  label: "Registration Fee" },
+            { value: 1,    suffix: " USDT",   label: "Registration Fee" },
             { value: 35,   suffix: "%",      label: "Max APY" },
           ].map((s) => (
             <div key={s.label}>
@@ -435,7 +483,7 @@ export default function LandingPage() {
 
           <div className="grid md:grid-cols-3 gap-5">
             {[
-              { label: "Permissionless", value: "1,000 XSEN", desc: "No whitelist. Any X Layer ERC20 project registers and is live in minutes." },
+              { label: "Permissionless", value: "$1 USDT", desc: "No whitelist. Any X Layer ERC20 project registers and is live in minutes." },
               { label: "Shared Security", value: "4 Contracts", desc: "One Governor. One Registry. Per-project staking. Security upgrades benefit everyone." },
               { label: "Aligned Incentives", value: "100% to stakers", desc: "Registration fees flow directly to XSEN stakers. Platform and users grow together." },
             ].map((item, i) => (
