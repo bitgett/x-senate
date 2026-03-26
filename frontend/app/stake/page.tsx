@@ -119,6 +119,17 @@ export default function StakePage() {
   const [epoch, setEpoch]           = useState<any>(null);
   const [delegating, setDelegating] = useState<string | null>(null);
   const [txStatus, setTxStatus]     = useState<string | null>(null);
+  const [toastVisible, setToastVisible] = useState(false);
+
+  // Show toast whenever txStatus changes; auto-dismiss success after 4s
+  useEffect(() => {
+    if (!txStatus) { setToastVisible(false); return; }
+    setToastVisible(true);
+    if (txStatus.startsWith("✓")) {
+      const t = setTimeout(() => setToastVisible(false), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [txStatus]);
 
   // Stake form
   const [stakeAmount, setStakeAmount]   = useState("");
@@ -294,6 +305,38 @@ export default function StakePage() {
   return (
     <div className="-mx-6 -mt-6">
 
+      {/* ── Toast Notification ── */}
+      {txStatus && (
+        <div
+          className={`fixed bottom-6 right-6 z-50 flex items-start gap-3 px-5 py-4 rounded-2xl border shadow-2xl max-w-sm transition-all duration-300 ${
+            toastVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
+          } ${
+            txStatus.startsWith("Error")
+              ? "bg-red-950/95 border-red-700/60 text-red-200"
+              : txStatus.startsWith("✓")
+              ? "bg-[#0d1f10]/95 border-green-600/50 text-green-200"
+              : "bg-gray-900/95 border-gray-700/60 text-gray-200"
+          }`}
+          style={{ backdropFilter: "blur(12px)" }}
+        >
+          <span className="text-lg leading-none mt-0.5">
+            {txStatus.startsWith("Error") ? "✕" : txStatus.startsWith("✓") ? "✓" : "⋯"}
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold leading-snug break-words">{txStatus}</p>
+            {txStatus.startsWith("✓") && (
+              <p className="text-xs opacity-50 mt-0.5">Transaction confirmed on X Layer</p>
+            )}
+          </div>
+          <button
+            onClick={() => setToastVisible(false)}
+            className="opacity-40 hover:opacity-80 text-sm leading-none mt-0.5 transition-opacity"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* ── Hero ── */}
       <div className="relative overflow-hidden px-6 pt-14 pb-8 border-b border-gray-800/40"
         style={{ background: "radial-gradient(ellipse 80% 60% at 50% -10%, rgba(139,92,246,0.12) 0%, transparent 70%)" }}
@@ -349,11 +392,6 @@ export default function StakePage() {
           </div>
         </div>
 
-        {txStatus && (
-          <div className={`mt-4 max-w-5xl mx-auto inline-block rounded-full px-4 py-1.5 text-xs border ${txStatus.startsWith("Error") ? "bg-red-900/20 border-red-700/40 text-red-300" : "bg-green-900/20 border-green-700/40 text-green-300"}`}>
-            {txStatus}
-          </div>
-        )}
       </div>
 
       {/* ── Protocol Stats Bar ── */}
