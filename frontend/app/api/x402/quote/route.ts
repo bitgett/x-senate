@@ -1,152 +1,76 @@
 /**
  * GET /api/x402/quote
- * Returns the XSEN amount required for a $10 payment.
- * Price sources (in priority order):
- *   1. OKX Web3 Market API v6  (POST web3.okx.com/api/v6/dex/market/price)
- *   2. On-chain pool via X Layer RPC  (getReserves on XSEN liquidity pool)
- *   3. Fallback $0.01
+ * Returns the USDT amount required for a $1 payment and the paymentRequirements
+ * structure needed for EIP-3009 transferWithAuthorization signing.
+ *
+ * USDT has 6 decimals → $1 = 1_000_000 units (no price oracle needed).
  */
 import { NextResponse } from "next/server";
-import { hasOkxKeys, okxGetTokenPrice } from "@/lib/okx";
 
-const XSEN_ADDRESS   = "0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b";
-const XSEN_POOL      = "0xb524efba890ed7087a4188b9b0148eb7fb954da9"; // X Layer DEX pool
-const TREASURY       = "0x8266D8e3B231dfD16fa21e40Cc3B99F38bC4B6C2";
-const XLAYER_RPC     = "https://rpc.xlayer.tech";
-const USD_FEE        = 10;
-const FALLBACK_PRICE = 0.01;
+const USDT_ADDRESS  = "0x779ded0c9e1022225f8e0630b35a9b54be713736";
+const TREASURY      = "0x8266D8e3B231dfD16fa21e40Cc3B99F38bC4B6C2";
+const XLAYER_RPC    = "https://rpc.xlayer.tech";
+const CHAIN_ID      = 196;
+const USD_FEE       = 1;
+const USDT_DECIMALS = 6;
+const USDT_AMOUNT   = USD_FEE * 10 ** USDT_DECIMALS; // 1_000_000
 
-// ── OKX DEX Market API v6 ──────────────────────────────────────────────────
-async function tryOkxMarketV6(): Promise<number | null> {
-  try {
-    const res = await fetch("https://web3.okx.com/api/v6/dex/market/price", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify([{ chainIndex: "196", tokenContractAddress: XSEN_ADDRESS }]),
-      signal: AbortSignal.timeout(5000),
-    });
-    const data = await res.json();
-    const price = parseFloat(data?.data?.[0]?.price ?? "0");
-    return price > 0 ? price : null;
-  } catch {
-    return null;
-  }
-}
+// ── RPC helpers ──────────────────────────────────────────────────────────────
 
-// ── On-chain pool price via X Layer RPC (Uniswap V3 / Algebra) ─────────────
 async function ethCall(to: string, data: string): Promise<string> {
   const res = await fetch(XLAYER_RPC, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0", id: 1, method: "eth_call",
-      params: [{ to, data }, "latest"],
-    }),
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to, data }, "latest"] }),
     signal: AbortSignal.timeout(5000),
   });
-  const json = await res.json();
-  return json.result ?? "0x";
+  return (await res.json()).result ?? "0x";
 }
 
-async function tryPoolPrice(): Promise<number | null> {
+function decodeAbiString(hex: string): string | null {
+  if (!hex || hex === "0x" || hex.length < 130) return null;
   try {
-    // Read token0, token1, and slot0 in parallel (Uniswap V3 / Algebra pool)
-    const [t0raw, t1raw, slot0raw] = await Promise.all([
-      ethCall(XSEN_POOL, "0x0dfe1681"), // token0()
-      ethCall(XSEN_POOL, "0xd21220a7"), // token1()
-      ethCall(XSEN_POOL, "0x3850c7bd"), // slot0() — V3/Algebra
-    ]);
-
-    if (!slot0raw || slot0raw === "0x" || slot0raw.length < 66) return null;
-
-    // sqrtPriceX96 is first 32 bytes of slot0 return (uint160, padded)
-    const sqrtPriceX96 = BigInt("0x" + slot0raw.slice(2, 66));
-    if (sqrtPriceX96 === 0n) return null;
-
-    const token0      = ("0x" + t0raw.slice(-40)).toLowerCase();
-    const token1      = ("0x" + t1raw.slice(-40)).toLowerCase();
-    const xsenIsToken0 = token0 === XSEN_ADDRESS.toLowerCase();
-    const pairedToken  = xsenIsToken0 ? token1 : token0;
-
-    const decRaw  = await ethCall(pairedToken, "0x313ce567"); // decimals()
-    const pairedDec = decRaw && decRaw !== "0x" ? (parseInt(decRaw.slice(-2), 16) || 18) : 18;
-
-    // V3 price: sqrtPriceX96 = sqrt(token1/token0 in raw units) * 2^96
-    // price of 1 XSEN in paired token (human units):
-    //   priceUsd = (sqrtPriceX96^2 / 2^192) * 10^decXSEN / 10^decPaired
-    const Q96 = 2n ** 96n;
-
-    let priceUsd: number;
-    if (xsenIsToken0) {
-      // price = sqrtPriceX96^2 / 2^192 * 10^(18 - pairedDec)
-      const scaledNum = sqrtPriceX96 * sqrtPriceX96 * (10n ** BigInt(18 - pairedDec)) * (10n ** 18n);
-      priceUsd = Number(scaledNum / (Q96 * Q96)) / 1e18;
-    } else {
-      // XSEN is token1: price = 2^192 / sqrtPriceX96^2 * 10^(18 - pairedDec)
-      const scaledNum = (Q96 * Q96) * (10n ** BigInt(18 - pairedDec)) * (10n ** 18n);
-      priceUsd = Number(scaledNum / (sqrtPriceX96 * sqrtPriceX96)) / 1e18;
-    }
-
-    if (pairedDec === 6 || pairedDec === 18) {
-      // For 18-dec paired tokens (OKB/wETH), get OKB price from CoinGecko
-      if (pairedDec === 18) {
-        const cgRes  = await fetch(
-          "https://api.coingecko.com/api/v3/simple/price?ids=okb&vs_currencies=usd",
-          { signal: AbortSignal.timeout(4000) }
-        );
-        const cgData = await cgRes.json().catch(() => null);
-        const okbUsd = cgData?.okb?.usd;
-        if (okbUsd && okbUsd > 0) priceUsd = priceUsd * okbUsd;
-        else return null;
-      }
-      return priceUsd > 0 ? priceUsd : null;
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
+    const length = parseInt(hex.slice(66, 130), 16);
+    if (length === 0 || length > 200) return null;
+    return Buffer.from(hex.slice(130, 130 + length * 2), "hex").toString("utf8");
+  } catch { return null; }
 }
 
-// ── Route handler ──────────────────────────────────────────────────────────
-export async function GET() {
-  const [authedPrice, marketPrice, poolPrice] = await Promise.all([
-    hasOkxKeys() ? okxGetTokenPrice("196", XSEN_ADDRESS) : Promise.resolve(null),
-    tryOkxMarketV6(),
-    tryPoolPrice(),
+/** Query the token's EIP-712 domain name and version from the contract. */
+async function getTokenDomain(address: string): Promise<{ name: string; version: string }> {
+  const [nameHex, versionHex] = await Promise.all([
+    ethCall(address, "0x06fdde03").catch(() => "0x"), // name()
+    ethCall(address, "0x54fd4d50").catch(() => "0x"), // version()
   ]);
+  return {
+    name:    decodeAbiString(nameHex)    ?? "Tether USD",
+    version: decodeAbiString(versionHex) ?? "1",
+  };
+}
 
-  let xsenPrice     = FALLBACK_PRICE;
-  let priceSource   = "fallback";
-  let fallbackReason: string | null = null;
+// ── Route handler ─────────────────────────────────────────────────────────────
 
-  if (authedPrice && authedPrice > 0) {
-    xsenPrice   = authedPrice;
-    priceSource = "okx_market_v6_auth";
-  } else if (marketPrice && marketPrice > 0) {
-    xsenPrice   = marketPrice;
-    priceSource = "okx_market_v6";
-  } else if (poolPrice && poolPrice > 0) {
-    xsenPrice   = poolPrice;
-    priceSource = "xlayer_pool";
-    fallbackReason = "okx_market_v6: token not listed";
-  } else {
-    fallbackReason = "okx_market_v6: token not listed; xlayer_pool: no liquidity or pool not found";
-  }
+export async function GET() {
+  const { name: tokenName, version: tokenVersion } = await getTokenDomain(USDT_ADDRESS);
 
-  const xsenAmount    = USD_FEE / xsenPrice;
-  const xsenAmountWei = BigInt(Math.ceil(xsenAmount * 1e18)).toString();
+  const paymentRequirements = {
+    scheme:            "exact",
+    maxAmountRequired: String(USDT_AMOUNT),
+    payTo:             TREASURY,
+    asset:             USDT_ADDRESS,
+    extra:             { name: tokenName, version: tokenVersion },
+  };
 
   return NextResponse.json({
-    usd_fee:         USD_FEE,
-    xsen_price_usd:  xsenPrice,
-    xsen_amount:     xsenAmount,
-    xsen_amount_wei: xsenAmountWei,
-    treasury:        TREASURY,
-    xsen_token:      XSEN_ADDRESS,
-    xsen_pool:       XSEN_POOL,
-    price_source:    priceSource,
-    fallback_reason: fallbackReason,
-    expires_at:      Date.now() + 5 * 60 * 1000,
+    usd_fee:             USD_FEE,
+    usdt_amount:         USDT_AMOUNT,
+    usdt_amount_str:     String(USDT_AMOUNT),
+    treasury:            TREASURY,
+    usdt_token:          USDT_ADDRESS,
+    chain_id:            CHAIN_ID,
+    token_name:          tokenName,
+    token_version:       tokenVersion,
+    paymentRequirements,
+    expires_at:          Date.now() + 5 * 60 * 1000,
   });
 }

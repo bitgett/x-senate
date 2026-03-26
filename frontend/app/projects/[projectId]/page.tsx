@@ -6,18 +6,52 @@ import { ethers } from "ethers";
 import { useWallet } from "@/contexts/WalletContext";
 import { STATUS_LABELS } from "@/types";
 
-const TOKEN_IFACE = new ethers.Interface(["function transfer(address to, uint256 amount) returns (bool)"]);
-const RPC_PROVIDER = new ethers.JsonRpcProvider("https://rpc.xlayer.tech");
-async function sendTx(rawProv: any, from: string, to: string, data: string): Promise<string> {
-  return await rawProv.request({ method: "eth_sendTransaction", params: [{ from, to, data, gas: "0x3D090" }] });
-}
-async function waitTx(hash: string): Promise<void> {
-  for (let i = 0; i < 60; i++) {
-    const r = await RPC_PROVIDER.getTransactionReceipt(hash).catch(() => null);
-    if (r) return;
-    await new Promise(res => setTimeout(res, 2000));
-  }
-  throw new Error("Transaction not confirmed after 2 minutes");
+async function signTransferAuthorization(
+  rawProv: any,
+  from: string,
+  to: string,
+  value: number,
+  tokenAddress: string,
+  chainId: number,
+  tokenName: string,
+  tokenVersion: string,
+) {
+  const validAfter  = "0";
+  const validBefore = String(Math.floor(Date.now() / 1000) + 300);
+  const nonce       = ethers.hexlify(ethers.randomBytes(32));
+  const typedData = {
+    types: {
+      EIP712Domain: [
+        { name: "name",              type: "string"  },
+        { name: "version",           type: "string"  },
+        { name: "chainId",           type: "uint256" },
+        { name: "verifyingContract", type: "address" },
+      ],
+      TransferWithAuthorization: [
+        { name: "from",        type: "address" },
+        { name: "to",          type: "address" },
+        { name: "value",       type: "uint256" },
+        { name: "validAfter",  type: "uint256" },
+        { name: "validBefore", type: "uint256" },
+        { name: "nonce",       type: "bytes32" },
+      ],
+    },
+    domain: { name: tokenName, version: tokenVersion, chainId, verifyingContract: tokenAddress },
+    primaryType: "TransferWithAuthorization",
+    message: { from, to, value: String(value), validAfter, validBefore, nonce },
+  };
+  const signature: string = await rawProv.request({
+    method: "eth_signTypedData_v4",
+    params: [from, JSON.stringify(typedData)],
+  });
+  return {
+    x402Version: 1,
+    scheme:      "exact",
+    payload: {
+      signature,
+      authorization: { from, to, value: String(value), validAfter, validBefore, nonce },
+    },
+  };
 }
 
 function truncateAddr(addr: string) {
@@ -58,9 +92,7 @@ export default function ProjectPage() {
   const [subAction,     setSubAction]     = useState("");
   const [submitting,    setSubmitting]    = useState(false);
   const [subError,      setSubError]      = useState("");
-  const [subPayStep,    setSubPayStep]    = useState<"idle"|"fetching"|"paying"|"verifying"|"done">("idle");
-  // retryTxHash persists across modal close so a paid-but-failed submission can retry without a second payment
-  const [retryTxHash,   setRetryTxHash]   = useState<string|null>(null);
+  const [subPayStep, setSubPayStep] = useState<"idle"|"fetching"|"signing"|"settling"|"done">("idle");
 
   // Sentinel
   const [runningSentinel, setRunningSentinel] = useState(false);
@@ -97,45 +129,46 @@ export default function ProjectPage() {
     if (!subTitle.trim() || !subSummary.trim()) { setSubError("Title and summary are required."); return; }
     setSubmitting(true); setSubError(""); setSubPayStep("idle");
     try {
-      let txHash = retryTxHash;
+      // Step 1: Get $1 USDT quote
+      setSubPayStep("fetching");
+      const quoteRes = await fetch("/api/x402/quote");
+      const quote    = await quoteRes.json();
 
-      // Pay if no valid tx hash from a prior attempt
-      if (!txHash) {
-        setSubPayStep("fetching");
-        const quoteRes = await fetch("/api/x402/quote");
-        const quote = await quoteRes.json();
-        setSubPayStep("paying");
-        txHash = await sendTx(rawProvider(), wallet, quote.xsen_token,
-          TOKEN_IFACE.encodeFunctionData("transfer", [quote.treasury, BigInt(quote.xsen_amount_wei)]));
-        setRetryTxHash(txHash); // persist so modal close doesn't lose it
-        setSubPayStep("verifying");
-        await waitTx(txHash);
-      }
+      // Step 2: Sign EIP-3009 transferWithAuthorization (off-chain, no gas)
+      setSubPayStep("signing");
+      const paymentPayload = await signTransferAuthorization(
+        rawProvider(), wallet, quote.treasury,
+        quote.usdt_amount, quote.usdt_token,
+        quote.chain_id ?? 196,
+        quote.token_name  ?? "Tether USD",
+        quote.token_version ?? "1",
+      );
 
-      setSubPayStep("done");
+      // Step 3: Submit — server calls OKX x402/verify + settle + Sentinel
+      setSubPayStep("settling");
       const res = await fetch("/api/proposals/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          project_id:       projectId,
-          title:            subTitle.trim(),
-          summary:          subSummary.trim(),
-          motivation:       subMotivation.trim() || null,
-          proposed_action:  subAction.trim() || null,
-          proposer_address: wallet,
-          payment_tx_hash:  txHash,
+          project_id:        projectId,
+          title:             subTitle.trim(),
+          summary:           subSummary.trim(),
+          motivation:        subMotivation.trim() || null,
+          proposed_action:   subAction.trim() || null,
+          submitter_address: wallet,
+          payment_payload:   paymentPayload,
+          token_name:        quote.token_name,
+          token_version:     quote.token_version,
         }),
       });
+      setSubPayStep("done");
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail ?? "Submission failed");
-      // Success — clear everything including the retry hash
-      setRetryTxHash(null);
       setShowSubmit(false);
       setSubTitle(""); setSubSummary(""); setSubMotivation(""); setSubAction("");
       router.push(`/proposals/${data.proposal?.id ?? data.id}`);
     } catch (e: any) {
       setSubError(e.message ?? "Submission failed");
-      // retryTxHash is intentionally NOT cleared here — lets user retry without paying again
     }
     setSubmitting(false);
     setSubPayStep("idle");
@@ -434,18 +467,13 @@ export default function ProjectPage() {
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 resize-none"
                 />
               </div>
-              {retryTxHash && !submitting && (
-                <div className="bg-yellow-900/20 border border-yellow-800/40 rounded-lg p-2.5 text-[11px] text-yellow-400">
-                  Payment already sent — retrying submission without a second charge.
-                </div>
-              )}
               {submitting && subPayStep !== "idle" && subPayStep !== "done" && (
                 <div className="flex gap-3 text-[11px]">
-                  {(["fetching","paying","verifying","done"] as const).map((s, i) => {
-                    const idx = ["fetching","paying","verifying","done"].indexOf(subPayStep);
+                  {(["fetching","signing","settling","done"] as const).map((s, i) => {
+                    const idx = ["fetching","signing","settling","done"].indexOf(subPayStep);
                     return (
                       <span key={s} className={i < idx ? "text-green-400" : i === idx ? "text-yellow-300 font-semibold" : "text-gray-600"}>
-                        {i < idx ? "✓" : i === idx ? "→" : "○"} {["Quote","Paying","Verifying","AI Review"][i]}
+                        {i < idx ? "✓" : i === idx ? "→" : "○"} {["Quote","Sign","Settle","AI Review"][i]}
                       </span>
                     );
                   })}
@@ -459,7 +487,7 @@ export default function ProjectPage() {
                 </button>
                 <button onClick={handleSubmitProposal} disabled={submitting}
                   className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors">
-                  {submitting ? "Submitting..." : retryTxHash ? "Retry Submission →" : "Pay & Submit (~$10 in XSEN) →"}
+                  {submitting ? "Submitting..." : "Sign & Submit ($1 USDT) →"}
                 </button>
               </div>
               <p className="text-[11px] text-gray-700 text-center">Genesis 5 AI agents will review and vote on this proposal</p>

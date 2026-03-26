@@ -1,95 +1,69 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbCreateUGA, dbIsPaymentHashUsed, dbMarkPaymentHashUsed, initSchema } from "@/lib/db";
-import { hasOkxKeys, okxGetTokenPrice, okxX402Verify } from "@/lib/okx";
+import { hasOkxKeys, okxX402Verify, okxX402Settle } from "@/lib/okx";
 
-const XLAYER_RPC   = "https://rpc.xlayer.tech";
-const XSEN_ADDRESS = "0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b".toLowerCase();
-const TREASURY     = "0x8266D8e3B231dfD16fa21e40Cc3B99F38bC4B6C2".toLowerCase();
-const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
-const XSEN_USD_FEE   = 10;
-const FALLBACK_PRICE = 0.01;
+const USDT_ADDRESS = "0x779ded0c9e1022225f8e0630b35a9b54be713736";
+const TREASURY     = "0x8266D8e3B231dfD16fa21e40Cc3B99F38bC4B6C2";
+const USDT_AMOUNT  = "1000000"; // $1 in 6-decimal units
 
-async function getRequiredXsenWei(): Promise<bigint> {
-  const okxPrice = hasOkxKeys() ? await okxGetTokenPrice("196", XSEN_ADDRESS) : null;
-  if (okxPrice && okxPrice > 0) return BigInt(Math.ceil((XSEN_USD_FEE / okxPrice) * 1e18));
-  try {
-    const res = await fetch("https://web3.okx.com/api/v6/dex/market/price", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify([{ chainIndex: "196", tokenContractAddress: XSEN_ADDRESS }]),
-      signal: AbortSignal.timeout(5000),
-    });
-    const data = await res.json();
-    const price = parseFloat(data?.data?.[0]?.price ?? "0");
-    if (price > 0) return BigInt(Math.ceil((XSEN_USD_FEE / price) * 1e18));
-  } catch { /* fallback */ }
-  return BigInt(Math.ceil((XSEN_USD_FEE / FALLBACK_PRICE) * 1e18));
-}
-
-async function verifyPayment(txHash: string, requiredWei: bigint): Promise<{ ok: boolean; error?: string }> {
-  if (hasOkxKeys()) {
-    const okx = await okxX402Verify({ txHash, chainIndex: "196", tokenAddress: XSEN_ADDRESS, toAddress: TREASURY, amount: requiredWei.toString() });
-    if (okx.verified) return { ok: true };
-    // Any OKX error → fall through to RPC receipt check (more reliable)
-  }
-  try {
-    const res = await fetch(XLAYER_RPC, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getTransactionReceipt", params: [txHash] }),
-      signal: AbortSignal.timeout(8000),
-    });
-    const data = await res.json();
-    const receipt = data.result;
-    if (!receipt) return { ok: false, error: "Transaction not found or pending" };
-    if (receipt.status !== "0x1") return { ok: false, error: "Transaction failed on-chain" };
-    let received = 0n;
-    for (const log of (receipt.logs ?? [])) {
-      if (
-        log.address?.toLowerCase() === XSEN_ADDRESS &&
-        log.topics?.[0] === TRANSFER_TOPIC &&
-        ("0x" + log.topics?.[2]?.slice(26)).toLowerCase() === TREASURY
-      ) {
-        received += BigInt(log.data);
-      }
-    }
-    if (received === 0n) return { ok: false, error: "No XSEN transfer to treasury in this TX" };
-    if (received < requiredWei) return { ok: false, error: `Insufficient: got ${received}, need ${requiredWei}` };
-    return { ok: true };
-  } catch (e: any) {
-    console.error("x402 RPC error:", e.message);
-    return { ok: false, error: "Payment verification unavailable — please retry in a moment" };
-  }
+/** Build the fixed paymentRequirements from the token domain the client reported. */
+function buildRequirements(tokenName: string, tokenVersion: string) {
+  return {
+    scheme:            "exact",
+    maxAmountRequired: USDT_AMOUNT,
+    payTo:             TREASURY,
+    asset:             USDT_ADDRESS,
+    extra:             { name: tokenName, version: tokenVersion },
+  };
 }
 
 export async function POST(req: NextRequest) {
   try {
     await initSchema();
     const body = await req.json();
-    const { wallet_address, agent_name, system_prompt, focus_area, avatar_base64, payment_tx_hash } = body;
+    const {
+      wallet_address, agent_name, system_prompt, focus_area, avatar_base64,
+      payment_payload, token_name, token_version,
+    } = body;
 
     // ── x402 Payment Gate ────────────────────────────────────────────────────
-    if (!payment_tx_hash) {
-      const requiredWei = await getRequiredXsenWei();
+    if (!payment_payload) {
       return NextResponse.json({
-        detail: "Payment required",
-        x402: true,
-        usd_fee: XSEN_USD_FEE,
-        required_xsen_wei: requiredWei.toString(),
-        treasury: TREASURY,
-        xsen_token: XSEN_ADDRESS,
+        detail:              "Payment required",
+        x402:                true,
+        usd_fee:             1,
+        usdt_amount:         USDT_AMOUNT,
+        treasury:            TREASURY,
+        usdt_token:          USDT_ADDRESS,
       }, { status: 402 });
     }
 
-    // Replay protection: reject reused tx hashes
-    if (await dbIsPaymentHashUsed(payment_tx_hash)) {
-      return NextResponse.json({ detail: "Payment already used — each transaction can only register one agent" }, { status: 402 });
+    if (!hasOkxKeys()) {
+      return NextResponse.json({ detail: "Payment service unavailable — OKX keys not configured" }, { status: 503 });
     }
 
-    // Verify payment inline (no internal HTTP hop)
-    const requiredWei = await getRequiredXsenWei();
-    const verify = await verifyPayment(payment_tx_hash, requiredWei);
-    if (!verify.ok) {
+    // Extract nonce from paymentPayload for replay protection
+    const nonce: string | undefined = (payment_payload as any)?.payload?.authorization?.nonce;
+    if (!nonce) {
+      return NextResponse.json({ detail: "Invalid payment payload: missing nonce" }, { status: 400 });
+    }
+
+    // Replay protection: reject reused nonces
+    if (await dbIsPaymentHashUsed(nonce)) {
+      return NextResponse.json({ detail: "Payment already used — each authorization can only register one agent" }, { status: 402 });
+    }
+
+    const tName    = token_name    ?? "Tether USD";
+    const tVersion = token_version ?? "1";
+    const paymentRequirements = buildRequirements(tName, tVersion);
+
+    // ── Verify via OKX x402 ──────────────────────────────────────────────────
+    const verify = await okxX402Verify({
+      chainIndex:           "196",
+      paymentPayload:       payment_payload,
+      paymentRequirements,
+    });
+    if (!verify.verified) {
       return NextResponse.json({ detail: `Payment verification failed: ${verify.error}` }, { status: 402 });
     }
 
@@ -101,9 +75,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ detail: "Avatar too large. Max 200KB." }, { status: 400 });
     }
 
-    await dbMarkPaymentHashUsed(payment_tx_hash, "agent_registration");
+    // ── Settle via OKX x402 ──────────────────────────────────────────────────
+    const settle = await okxX402Settle({
+      chainIndex:           "196",
+      paymentPayload:       payment_payload,
+      paymentRequirements,
+      syncSettle:           true,
+    });
+    if (!settle.success) {
+      return NextResponse.json({ detail: `Payment settlement failed: ${settle.error}` }, { status: 402 });
+    }
+
+    // Mark nonce as consumed (after successful settlement)
+    await dbMarkPaymentHashUsed(nonce, "agent_registration");
+
     const agent = await dbCreateUGA({ wallet_address, agent_name, system_prompt, focus_area, avatar_base64 });
-    return NextResponse.json(agent, { status: 201 });
+    return NextResponse.json({ ...agent, payment_tx_hash: settle.txHash }, { status: 201 });
   } catch (e: any) {
     return NextResponse.json({ detail: e.message ?? String(e) }, { status: 400 });
   }

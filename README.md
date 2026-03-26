@@ -285,6 +285,198 @@ X Layer (chainId 196) has no ENS registry. All on-chain reads use `ethers.JsonRp
 
 ---
 
+## Developer Reference
+
+### Environment Variables (Complete)
+
+| Variable | Required | Description |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | ✅ | Claude API key (`claude-sonnet-4-6`) |
+| `DATABASE_URL` | ✅ | Neon Postgres connection string |
+| `OKX_API_KEY` | ✅ | OKX OnchainOS API key |
+| `OKX_SECRET_KEY` | ✅ | OKX OnchainOS secret |
+| `OKX_PASSPHRASE` | ✅ | OKX OnchainOS passphrase |
+| `ADMIN_SECRET` | ✅ | Protects `DELETE /api/proposals/[id]` |
+| `XSEN_STAKING_ADDRESS` | optional | Server-side staking address (default: `0xc8FD...bFD`) |
+| `XSEN_TOKEN_ADDRESS` | optional | Server-side token address (default: `0x1bAB...89b`) |
+| `XSEN_GOVERNOR_ADDRESS` | optional | Server-side governor address (default: `0xeD57...546`) |
+| `XSEN_REGISTRY_ADDRESS` | optional | Server-side registry address (default: `0x111b...3e5`) |
+| `NEXT_PUBLIC_XSEN_STAKING_ADDRESS` | optional | Client-side staking address |
+| `NEXT_PUBLIC_XSEN_TOKEN_ADDRESS` | optional | Client-side token address |
+| `NEXT_PUBLIC_XSEN_REGISTRY_ADDRESS` | optional | Client-side registry address |
+| `XLAYER_RPC_URL` | optional | X Layer RPC (default: `https://rpc.xlayer.tech`) |
+
+> All contract address env vars have hardcoded mainnet fallbacks — the app runs without them set.
+
+---
+
+### API Routes
+
+| Method | Route | Auth | Description |
+|---|---|---|---|
+| GET | `/api/proposals` | — | List all proposals (all projects) |
+| GET | `/api/proposals/[id]` | — | Single proposal with votes + debate turns |
+| POST | `/api/proposals/submit` | x402 payment | Submit proposal (x402-gated, ~$10 XSEN) |
+| DELETE | `/api/proposals/[id]` | `x-admin-secret` | Delete proposal |
+| POST | `/api/proposals/sentinel/scan` | — | Sentinel AI: scan signals + create Draft |
+| GET | `/api/proposals/seed` | — | Seed demo proposals |
+| POST | `/api/senate/review/[id]` | — | Trigger 5-agent parallel vote (SSE) |
+| GET | `/api/senate/votes/[id]` | — | Get all agent votes for proposal |
+| GET | `/api/debate/turns/[id]` | — | Get debate turns |
+| POST | `/api/debate/start/[id]` | — | Start relay debate |
+| GET | `/api/debate/stream/[id]` | — | Stream relay debate (SSE) |
+| POST | `/api/execute/[id]` | — | Execute approved proposal on-chain |
+| POST | `/api/execute/reflect/[id]` | — | Post-vote agent reflection |
+| GET | `/api/personas` | — | Genesis 5 agent definitions |
+| POST | `/api/uga/register` | x402 payment | Register custom agent (~$10 XSEN) |
+| GET | `/api/uga` | — | List all user-created agents |
+| GET | `/api/x402/quote` | — | Live XSEN price quote for payment |
+| POST | `/api/x402/verify` | — | Verify payment tx hash (OKX → RPC fallback) |
+| GET | `/api/registry/projects` | — | List registered projects |
+| POST | `/api/registry/projects` | tx_hash required | Register new project |
+| GET | `/api/registry/projects/[id]` | — | Project metadata |
+| GET | `/api/registry/projects/[id]/staking` | — | Project staking stats |
+| GET | `/api/registry/stats` | — | Registry global stats |
+| GET | `/api/staking/tiers` | — | Tier definitions (APY, VP mult, lock) |
+| GET | `/api/staking/totals` | — | Total staked + total VP (on-chain) |
+| GET | `/api/staking/epoch` | — | Current epoch info (on-chain) |
+| GET | `/api/staking/leaderboard` | — | Top agents by delegated VP |
+| GET | `/api/staking/positions/[address]` | — | User positions (on-chain) |
+| GET | `/api/staking/vp/[address]` | — | User effective VP (on-chain) |
+| GET | `/api/onchain/gas` | — | X Layer gas prices |
+| GET | `/api/onchain/market/price` | — | XSEN USD price |
+| GET | `/api/onchain/market/summary` | — | XSEN market summary |
+| GET | `/api/onchain/market/trending` | — | Trending tokens on X Layer |
+| GET | `/api/onchain/contract` | — | Contract metadata |
+| GET | `/api/onchain/xlayer/info` | — | X Layer chain info |
+| GET | `/api/onchain/security/scan-token` | — | Token security scan |
+| GET | `/api/onchain/wallet/[address]/portfolio` | — | Wallet token balances |
+| GET | `/api/onchain/wallet/[address]/activity` | — | Wallet TX history (eth_getLogs) |
+| GET | `/api/onchain/wallet/[address]/voting-power` | — | Wallet effective VP |
+
+---
+
+### Database Schema (Neon Postgres)
+
+```sql
+-- Governance proposals
+proposals (
+  id               TEXT PRIMARY KEY,          -- UUID
+  project_id       TEXT DEFAULT 'XSEN',       -- which project this belongs to
+  title            TEXT,
+  summary          TEXT,
+  motivation       TEXT,
+  proposed_action  TEXT,
+  potential_risks  TEXT,
+  sentinel_analysis TEXT,                     -- raw Sentinel AI output
+  source_data      TEXT,                      -- signals used by Sentinel
+  status           TEXT DEFAULT 'Draft',      -- Draft | In_Senate | Approved | Rejected | In_Debate | Executed
+  approve_count    INTEGER DEFAULT 0,
+  reject_count     INTEGER DEFAULT 0,
+  snapshot_url     TEXT,
+  tx_hash          TEXT,                      -- on-chain execution tx
+  one_liner_opinions TEXT,                    -- JSON: {agentName: "one line"}
+  proposer_address TEXT,
+  created_at       TIMESTAMPTZ,
+  updated_at       TIMESTAMPTZ
+)
+
+-- Agent votes per proposal
+agent_votes (
+  id               SERIAL PRIMARY KEY,
+  proposal_id      TEXT,
+  agent_name       TEXT,                      -- Guardian | Merchant | Architect | Diplomat | Populist | custom
+  vote             TEXT,                      -- Approve | Reject | Abstain
+  reason           TEXT,
+  chain_of_thought TEXT,
+  confidence       INTEGER,                   -- 0-100
+  reflection_notes TEXT,
+  voted_at         TIMESTAMPTZ
+)
+
+-- Relay debate turns
+debate_turns (
+  id               SERIAL PRIMARY KEY,
+  proposal_id      TEXT,
+  agent_name       TEXT,
+  turn_order       INTEGER,
+  full_argument    TEXT,
+  one_liner        TEXT
+)
+
+-- Community-created agents
+user_agents (
+  id               SERIAL PRIMARY KEY,
+  wallet_address   TEXT,
+  agent_name       TEXT UNIQUE,
+  system_prompt    TEXT,
+  focus_area       TEXT,
+  avatar_base64    TEXT,
+  rank             TEXT DEFAULT 'Bronze',
+  delegated_vp     NUMERIC DEFAULT 0,
+  score            NUMERIC DEFAULT 0,
+  created_at       TIMESTAMPTZ
+)
+
+-- Project registry (off-chain metadata)
+projects_meta (
+  project_id    TEXT PRIMARY KEY,             -- e.g. 'QTKN', 'XSEN'
+  name          TEXT,
+  description   TEXT,
+  token_address TEXT,
+  twitter       TEXT,
+  discord       TEXT,
+  telegram      TEXT,
+  registrant    TEXT,                         -- wallet address
+  tx_hash       TEXT,                         -- registration tx
+  logo_base64   TEXT,
+  created_at    TIMESTAMPTZ
+)
+
+-- Payment replay protection
+used_payment_hashes (
+  tx_hash  TEXT PRIMARY KEY,
+  purpose  TEXT,                              -- 'agent_registration' | 'proposal_submission'
+  used_at  TIMESTAMPTZ
+)
+```
+
+---
+
+### Contract ABIs (Key Functions)
+
+```solidity
+// XSenateStaking — 0xc8FD7B12De6bFb10dF3eaCb38AAc09CBbeb25bFD
+function stake(uint256 amount, uint8 tier) external
+function unstake(uint256 positionId) external
+function claimAllRewards() external
+function delegatePosition(uint256 positionId, string agentName) external
+function getUserPositions(address user) view returns (tuple(
+  uint256 id, address owner, uint256 amount, uint8 tier,
+  uint256 lockEnd, uint256 stakedAt, uint256 lastRewardAt,
+  uint256 accReward, string delegatedAgent, bool active
+)[])
+function getEffectiveVP(address user) view returns (uint256)
+function getEpochInfo() view returns (uint256 epochId, uint256 startTime, uint256 endTime, uint256 rewardPool, bool finalized)
+function getTotalStaked() view returns (uint256 totalStaked, uint256 totalEffectiveVP)
+
+// XSenateGovernor — 0xeD57C957D9f1F4CBF39155303B7143B605ff3546
+function castSenateVote(string proposalId, string agentName, bool approve) external
+function executeProposal(string proposalId, string action) external
+function snapshotForProposal(string proposalId) external
+
+// XSenateRegistry — 0x111bC1681fc34EAcab66f75D8273C4ECD49b13e5
+function registerProject(string projectId, string name, address tokenAddr, address stakingAddr) external
+function getProject(string projectId) view returns (tuple(...))
+
+// XToken (XSEN ERC20) — 0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b
+function approve(address spender, uint256 amount) external returns (bool)
+function transfer(address to, uint256 amount) external returns (bool)
+function balanceOf(address account) view returns (uint256)
+```
+
+---
+
 ## Local Development
 
 ```bash

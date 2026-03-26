@@ -13,11 +13,11 @@ export async function GET(req: NextRequest) {
   const projectId = req.nextUrl.searchParams.get("project_id") ?? "XSEN";
   const limit = parseInt(req.nextUrl.searchParams.get("limit") ?? "10");
   const onchain = await getLeaderboard(limit);
-  if (onchain.length > 0) return NextResponse.json(onchain);
+  if (onchain.length > 0) return NextResponse.json({ leaderboard: onchain });
 
   const RANK_LABEL: Record<number, string> = { 1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 5: "5th" };
   // Return Genesis 5 with mock VP data when contract not deployed
-  return NextResponse.json(
+  return NextResponse.json({ leaderboard:
     GENESIS_5_META.map((a, i) => ({
       rank: i + 1,
       rank_label: RANK_LABEL[i + 1] ?? "",
@@ -30,5 +30,5 @@ export async function GET(req: NextRequest) {
       creator: null,
       voted_this_epoch: i < 3,
     }))
-  );
+  });
 }

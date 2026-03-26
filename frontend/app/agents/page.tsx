@@ -31,7 +31,6 @@ const STAKING_ABI = [
   "function delegatePosition(uint256 positionId, string agentName) external",
 ];
 const STAKING_IFACE = new ethers.Interface(STAKING_ABI);
-const TOKEN_TRANSFER_IFACE = new ethers.Interface(["function transfer(address to, uint256 amount) returns (bool)"]);
 const RPC_PROVIDER = new ethers.JsonRpcProvider("https://rpc.xlayer.tech");
 async function sendTx(rawProv: any, from: string, to: string, data: string): Promise<string> {
   return await rawProv.request({ method: "eth_sendTransaction", params: [{ from, to, data, gas: "0x3D090" }] });
@@ -43,6 +42,61 @@ async function waitTx(hash: string): Promise<void> {
     await new Promise(res => setTimeout(res, 2000));
   }
   throw new Error("Transaction not confirmed after 2 minutes");
+}
+
+/**
+ * EIP-3009 transferWithAuthorization — off-chain signature, no gas from user.
+ * OKX x402 infrastructure executes the actual on-chain transfer.
+ */
+async function signTransferAuthorization(
+  rawProv: any,
+  from: string,
+  to: string,
+  value: number,
+  tokenAddress: string,
+  chainId: number,
+  tokenName: string,
+  tokenVersion: string,
+) {
+  const validAfter  = "0";
+  const validBefore = String(Math.floor(Date.now() / 1000) + 300); // 5 min
+  const nonce       = ethers.hexlify(ethers.randomBytes(32));
+
+  const typedData = {
+    types: {
+      EIP712Domain: [
+        { name: "name",              type: "string"  },
+        { name: "version",           type: "string"  },
+        { name: "chainId",           type: "uint256" },
+        { name: "verifyingContract", type: "address" },
+      ],
+      TransferWithAuthorization: [
+        { name: "from",        type: "address" },
+        { name: "to",          type: "address" },
+        { name: "value",       type: "uint256" },
+        { name: "validAfter",  type: "uint256" },
+        { name: "validBefore", type: "uint256" },
+        { name: "nonce",       type: "bytes32" },
+      ],
+    },
+    domain: { name: tokenName, version: tokenVersion, chainId, verifyingContract: tokenAddress },
+    primaryType: "TransferWithAuthorization",
+    message: { from, to, value: String(value), validAfter, validBefore, nonce },
+  };
+
+  const signature: string = await rawProv.request({
+    method: "eth_signTypedData_v4",
+    params: [from, JSON.stringify(typedData)],
+  });
+
+  return {
+    x402Version: 1,
+    scheme:      "exact",
+    payload: {
+      signature,
+      authorization: { from, to, value: String(value), validAfter, validBefore, nonce },
+    },
+  };
 }
 
 const AGENT_DETAILS: Record<string, { mandate: string; style: string; weights: string[]; accent: string }> = {
@@ -210,8 +264,8 @@ export default function AgentsPage() {
   const [avatarBase64, setAvatarBase64] = useState<string | null>(null);
   const [registering, setRegistering]  = useState(false);
   const [registerResult, setRegResult]  = useState<{ ok: boolean; msg: string } | null>(null);
-  const [payStep, setPayStep]           = useState<"idle" | "fetching" | "paying" | "verifying" | "done">("idle");
-  const [payQuote, setPayQuote]         = useState<{ xsen_amount: number; usd_fee: number; xsen_price_usd: number } | null>(null);
+  const [payStep, setPayStep]           = useState<"idle" | "fetching" | "signing" | "settling" | "done">("idle");
+  const [payQuote, setPayQuote]         = useState<{ usdt_amount: number; usd_fee: number } | null>(null);
 
   function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -301,29 +355,35 @@ export default function AgentsPage() {
     setRegResult(null);
     setPayStep("fetching");
     try {
-      // Step 1: Get x402 quote (live XSEN price from OKX Market API)
+      // Step 1: Get x402 quote (USDT fixed $1)
       const quoteRes = await fetch("/api/x402/quote");
       const quote = await quoteRes.json();
-      setPayQuote(quote);
-      setPayStep("paying");
+      setPayQuote({ usdt_amount: quote.usdt_amount, usd_fee: quote.usd_fee });
+      setPayStep("signing");
 
-      // Step 2: Transfer XSEN to treasury
-      const txHash = await sendTx(rawProvider(), wallet, quote.xsen_token,
-        TOKEN_TRANSFER_IFACE.encodeFunctionData("transfer", [quote.treasury, BigInt(quote.xsen_amount_wei)]));
-      setPayStep("verifying");
-      await waitTx(txHash);
+      // Step 2: Sign EIP-3009 transferWithAuthorization (off-chain, no gas)
+      const paymentPayload = await signTransferAuthorization(
+        rawProvider(), wallet, quote.treasury,
+        quote.usdt_amount, quote.usdt_token,
+        quote.chain_id ?? 196,
+        quote.token_name ?? "Tether USD",
+        quote.token_version ?? "1",
+      );
+      setPayStep("settling");
 
-      // Step 3: Register with payment proof
-      setPayStep("done");
+      // Step 3: Register — server calls OKX x402/verify + settle
       await registerUGA({
-        wallet_address: wallet,
-        agent_name: agentName.trim(),
-        system_prompt: customMode ? customPrompt : buildSystemPrompt({ name: agentName.trim(), focus: focusArea, style, ...weights, mandate }),
-        focus_area: focusArea,
-        avatar_base64: avatarBase64 ?? undefined,
-        payment_tx_hash: txHash,
+        wallet_address:  wallet,
+        agent_name:      agentName.trim(),
+        system_prompt:   customMode ? customPrompt : buildSystemPrompt({ name: agentName.trim(), focus: focusArea, style, ...weights, mandate }),
+        focus_area:      focusArea,
+        avatar_base64:   avatarBase64 ?? undefined,
+        payment_payload: paymentPayload,
+        token_name:      quote.token_name,
+        token_version:   quote.token_version,
       } as any);
-      setRegResult({ ok: true, msg: `Agent "${agentName.trim()}" registered! Payment: ${Math.ceil(quote.xsen_amount).toLocaleString()} XSEN ($${quote.usd_fee})` });
+      setPayStep("done");
+      setRegResult({ ok: true, msg: `Agent "${agentName.trim()}" registered! Payment: $${quote.usd_fee} USDT` });
       await loadUgas();
       setTimeout(() => setTab("mine"), 1500);
     } catch (e: any) {
@@ -825,8 +885,8 @@ export default function AgentsPage() {
                     </div>
                     {payQuote && (
                       <div className="text-yellow-300/70">
-                        Fee: <span className="font-bold text-yellow-300">{Math.ceil(payQuote.xsen_amount).toLocaleString()} XSEN</span>
-                        {" "}≈ ${payQuote.usd_fee} · XSEN @ ${payQuote.xsen_price_usd.toFixed(4)}
+                        Fee: <span className="font-bold text-yellow-300">${payQuote.usd_fee} USDT</span>
+                        {" "}· Sign in wallet (no gas required)
                       </div>
                     )}
                     <div className="flex gap-3 text-[11px]">
@@ -859,9 +919,9 @@ export default function AgentsPage() {
                   style={{ boxShadow: "0 0 20px rgba(139,92,246,0.25)" }}
                 >
                   {registering
-                    ? payStep === "fetching"   ? "Getting price quote..."
-                    : payStep === "paying"     ? "Confirm XSEN payment in wallet..."
-                    : payStep === "verifying"  ? "Verifying payment on-chain..."
+                    ? payStep === "fetching"   ? "Getting payment quote..."
+                    : payStep === "signing"    ? "Sign payment in wallet..."
+                    : payStep === "settling"   ? "Settling payment via OKX..."
                     : "Registering agent..."
                     : wallet ? `Deploy ${agentName || "Agent"} to X-Senate — ~$10 in XSEN` : "Connect Wallet to Register"}
                 </button>

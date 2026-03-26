@@ -35,7 +35,7 @@ async function okxGet(path: string, timeoutMs = 8000) {
   return res.json();
 }
 
-async function okxPost(path: string, body: unknown, timeoutMs = 8000) {
+async function okxPost(path: string, body: unknown, timeoutMs = 15_000) {
   const bodyStr = JSON.stringify(body);
   const headers = okxAuthHeaders("POST", path, bodyStr);
   const res = await fetch(`${OKX_BASE}${path}`, { method: "POST", headers, body: bodyStr, signal: AbortSignal.timeout(timeoutMs) });
@@ -93,22 +93,51 @@ export async function okxGetTokenBalances(address: string, chains = "196") {
 
 /**
  * POST /api/v6/x402/verify
- * Verifies an x402 payment transaction via OKX OnchainOS.
+ * Validates an EIP-3009 transferWithAuthorization paymentPayload.
+ * paymentPayload = { x402Version, scheme, payload: { signature, authorization } }
+ * paymentRequirements = { scheme, maxAmountRequired, payTo, asset, extra }
  */
 export async function okxX402Verify(params: {
-  txHash: string;
   chainIndex: string;
-  tokenAddress?: string;
-  toAddress?: string;
-  amount?: string;
-}): Promise<{ verified: boolean; error?: string; data?: unknown }> {
+  paymentPayload: unknown;
+  paymentRequirements: unknown;
+}): Promise<{ verified: boolean; payer?: string; error?: string }> {
   try {
     const body = { x402Version: 1, ...params };
     const data = await okxPost("/api/v6/x402/verify", body);
-    if (data.code === "0") return { verified: true, data: data.data };
-    return { verified: false, error: data.msg ?? "OKX x402 verify failed" };
+    if (data.code === "0" && data.data?.[0]?.isValid) {
+      return { verified: true, payer: data.data[0].payer };
+    }
+    const reason = data.data?.[0]?.invalidReason ?? data.msg ?? "OKX x402 verify failed";
+    return { verified: false, error: reason };
   } catch (e: any) {
     return { verified: false, error: e.message };
+  }
+}
+
+// ── x402: payment settle ──────────────────────────────────────────────────
+
+/**
+ * POST /api/v6/x402/settle
+ * Executes the on-chain transferWithAuthorization via OKX infrastructure.
+ * syncSettle=true waits for on-chain confirmation before returning.
+ */
+export async function okxX402Settle(params: {
+  chainIndex: string;
+  paymentPayload: unknown;
+  paymentRequirements: unknown;
+  syncSettle?: boolean;
+}): Promise<{ success: boolean; txHash?: string; payer?: string; error?: string }> {
+  try {
+    const body = { x402Version: 1, syncSettle: true, ...params };
+    const data = await okxPost("/api/v6/x402/settle", body, 30_000);
+    if (data.code === "0" && data.data?.[0]?.success) {
+      return { success: true, txHash: data.data[0].txHash, payer: data.data[0].payer };
+    }
+    const reason = data.data?.[0]?.errorReason ?? data.msg ?? "Settlement failed";
+    return { success: false, error: reason };
+  } catch (e: any) {
+    return { success: false, error: e.message };
   }
 }
 
