@@ -162,6 +162,8 @@ Result: dedicated staking contract + access to Genesis 5 senate
 | Web3 | ethers.js v6 |
 | Deployment | Vercel |
 
+> **Note on `backend/` directory:** The repo includes a `backend/` folder containing an early-stage FastAPI (Python) prototype. This backend is **not used in the live deployment** — all API logic runs in Next.js Serverless Functions under `frontend/app/api/`. The Python code is retained for reference only.
+
 ---
 
 ## OKX OnchainOS Integration
