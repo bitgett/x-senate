@@ -213,6 +213,7 @@ export default function StakePage() {
       setStakeAmount("");
       await loadWalletData();
       await refreshVP();
+      setActiveTab("myvp");
     } catch (e: any) {
       setTxStatus(`Error: ${e.message?.slice(0, 80)}`);
     }
