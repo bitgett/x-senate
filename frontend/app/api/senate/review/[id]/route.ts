@@ -15,7 +15,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!proposal) {
     return new Response(JSON.stringify({ detail: "Proposal not found" }), { status: 404 });
   }
-  if (proposal.status !== "Draft") {
+
+  if (proposal.status === "In_Senate") {
+    // Stale lease: if stuck In_Senate for >90s with no votes, reset and allow retry
+    const staleMs = Date.now() - new Date(proposal.updated_at).getTime();
+    if (staleMs < 90_000) {
+      return new Response(JSON.stringify({ detail: "Senate review already in progress — please wait" }), { status: 400 });
+    }
+    // Reset stale lease → Draft so the stream can restart
+    await dbUpdateProposal(id, { status: "Draft" });
+  } else if (proposal.status !== "Draft") {
     return new Response(JSON.stringify({ detail: `Proposal status is '${proposal.status}', cannot review` }), { status: 400 });
   }
 

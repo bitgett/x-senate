@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runSentinelScan } from "@/lib/agents";
-import { dbCreateProposal, initSchema } from "@/lib/db";
+import { dbCreateProposal, dbGetProjectMeta, initSchema } from "@/lib/db";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
+import { getRegistryProjects } from "@/lib/contract";
 
 export const maxDuration = 60; // Vercel Pro: allow up to 60s for Claude
 
@@ -13,7 +14,22 @@ export async function POST(req: NextRequest) {
   try {
     await initSchema();
     const body = await req.json().catch(() => ({}));
-    const projectId = body?.project_id ?? "XSEN";
+    const projectId = (body?.project_id ?? "XSEN").trim().toUpperCase();
+
+    // Validate project_id
+    if (projectId !== "XSEN") {
+      const [meta, onchain] = await Promise.all([
+        dbGetProjectMeta(projectId).catch(() => null),
+        getRegistryProjects().catch(() => []),
+      ]);
+      const inOnchain = (onchain as any[]).some(
+        p => (p.projectId ?? p.project_id)?.toUpperCase() === projectId
+      );
+      if (!meta && !inOnchain) {
+        return NextResponse.json({ detail: `Project "${projectId}" is not registered in X-Senate` }, { status: 400 });
+      }
+    }
+
     const result = await runSentinelScan();
 
     if (result.draft_proposal) {

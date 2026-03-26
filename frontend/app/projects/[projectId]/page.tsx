@@ -2,8 +2,23 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { ethers } from "ethers";
 import { useWallet } from "@/contexts/WalletContext";
 import { STATUS_LABELS } from "@/types";
+
+const TOKEN_IFACE = new ethers.Interface(["function transfer(address to, uint256 amount) returns (bool)"]);
+const RPC_PROVIDER = new ethers.JsonRpcProvider("https://rpc.xlayer.tech");
+async function sendTx(rawProv: any, from: string, to: string, data: string): Promise<string> {
+  return await rawProv.request({ method: "eth_sendTransaction", params: [{ from, to, data }] });
+}
+async function waitTx(hash: string): Promise<void> {
+  for (let i = 0; i < 60; i++) {
+    const r = await RPC_PROVIDER.getTransactionReceipt(hash).catch(() => null);
+    if (r) return;
+    await new Promise(res => setTimeout(res, 2000));
+  }
+  throw new Error("Transaction not confirmed after 2 minutes");
+}
 
 function truncateAddr(addr: string) {
   if (!addr || addr.length < 10) return addr;
@@ -27,7 +42,7 @@ export default function ProjectPage() {
   const params    = useParams();
   const router    = useRouter();
   const projectId = (params?.projectId as string ?? "").toUpperCase();
-  const { wallet, openModal } = useWallet();
+  const { wallet, openModal, rawProvider } = useWallet();
 
   const [project,  setProject]  = useState<any>(null);
   const [proposals,setProposals]= useState<any[]>([]);
@@ -36,13 +51,16 @@ export default function ProjectPage() {
   const [notFound, setNotFound] = useState(false);
 
   // Submit Proposal modal
-  const [showSubmit,   setShowSubmit]   = useState(false);
-  const [subTitle,     setSubTitle]     = useState("");
-  const [subSummary,   setSubSummary]   = useState("");
-  const [subMotivation,setSubMotivation]= useState("");
-  const [subAction,    setSubAction]    = useState("");
-  const [submitting,   setSubmitting]   = useState(false);
-  const [subError,     setSubError]     = useState("");
+  const [showSubmit,    setShowSubmit]    = useState(false);
+  const [subTitle,      setSubTitle]      = useState("");
+  const [subSummary,    setSubSummary]    = useState("");
+  const [subMotivation, setSubMotivation] = useState("");
+  const [subAction,     setSubAction]     = useState("");
+  const [submitting,    setSubmitting]    = useState(false);
+  const [subError,      setSubError]      = useState("");
+  const [subPayStep,    setSubPayStep]    = useState<"idle"|"fetching"|"paying"|"verifying"|"done">("idle");
+  // retryTxHash persists across modal close so a paid-but-failed submission can retry without a second payment
+  const [retryTxHash,   setRetryTxHash]   = useState<string|null>(null);
 
   // Sentinel
   const [runningSentinel, setRunningSentinel] = useState(false);
@@ -77,29 +95,50 @@ export default function ProjectPage() {
   async function handleSubmitProposal() {
     if (!wallet) { openModal(); return; }
     if (!subTitle.trim() || !subSummary.trim()) { setSubError("Title and summary are required."); return; }
-    setSubmitting(true); setSubError("");
+    setSubmitting(true); setSubError(""); setSubPayStep("idle");
     try {
+      let txHash = retryTxHash;
+
+      // Pay if no valid tx hash from a prior attempt
+      if (!txHash) {
+        setSubPayStep("fetching");
+        const quoteRes = await fetch("/api/x402/quote");
+        const quote = await quoteRes.json();
+        setSubPayStep("paying");
+        txHash = await sendTx(rawProvider(), wallet, quote.xsen_token,
+          TOKEN_IFACE.encodeFunctionData("transfer", [quote.treasury, BigInt(quote.xsen_amount_wei)]));
+        setRetryTxHash(txHash); // persist so modal close doesn't lose it
+        setSubPayStep("verifying");
+        await waitTx(txHash);
+      }
+
+      setSubPayStep("done");
       const res = await fetch("/api/proposals/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          project_id:      projectId,
-          title:           subTitle.trim(),
-          summary:         subSummary.trim(),
-          motivation:      subMotivation.trim() || null,
-          proposed_action: subAction.trim() || null,
+          project_id:       projectId,
+          title:            subTitle.trim(),
+          summary:          subSummary.trim(),
+          motivation:       subMotivation.trim() || null,
+          proposed_action:  subAction.trim() || null,
           proposer_address: wallet,
+          payment_tx_hash:  txHash,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail ?? "Submission failed");
+      // Success — clear everything including the retry hash
+      setRetryTxHash(null);
       setShowSubmit(false);
       setSubTitle(""); setSubSummary(""); setSubMotivation(""); setSubAction("");
-      router.push(`/proposals/${data.id}`);
+      router.push(`/proposals/${data.proposal?.id ?? data.id}`);
     } catch (e: any) {
       setSubError(e.message ?? "Submission failed");
+      // retryTxHash is intentionally NOT cleared here — lets user retry without paying again
     }
     setSubmitting(false);
+    setSubPayStep("idle");
   }
 
   async function handleRunSentinel() {
@@ -395,6 +434,23 @@ export default function ProjectPage() {
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 resize-none"
                 />
               </div>
+              {retryTxHash && !submitting && (
+                <div className="bg-yellow-900/20 border border-yellow-800/40 rounded-lg p-2.5 text-[11px] text-yellow-400">
+                  Payment already sent — retrying submission without a second charge.
+                </div>
+              )}
+              {submitting && subPayStep !== "idle" && subPayStep !== "done" && (
+                <div className="flex gap-3 text-[11px]">
+                  {(["fetching","paying","verifying","done"] as const).map((s, i) => {
+                    const idx = ["fetching","paying","verifying","done"].indexOf(subPayStep);
+                    return (
+                      <span key={s} className={i < idx ? "text-green-400" : i === idx ? "text-yellow-300 font-semibold" : "text-gray-600"}>
+                        {i < idx ? "✓" : i === idx ? "→" : "○"} {["Quote","Paying","Verifying","AI Review"][i]}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
               {subError && <div className="bg-red-900/30 border border-red-700 rounded-lg p-3 text-sm text-red-300">{subError}</div>}
               <div className="flex gap-3">
                 <button onClick={() => setShowSubmit(false)}
@@ -403,7 +459,7 @@ export default function ProjectPage() {
                 </button>
                 <button onClick={handleSubmitProposal} disabled={submitting}
                   className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors">
-                  {submitting ? "Submitting..." : "Submit to Senate →"}
+                  {submitting ? "Submitting..." : retryTxHash ? "Retry Submission →" : "Pay & Submit (~$10 in XSEN) →"}
                 </button>
               </div>
               <p className="text-[11px] text-gray-700 text-center">Genesis 5 AI agents will review and vote on this proposal</p>

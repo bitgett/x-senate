@@ -24,6 +24,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   // If debate turns already exist, replay them without re-running AI
   const existingTurns = await dbGetDebateTurns(id);
+
+  // Stale lease: In_Debate for >90s but no turns saved → prior run was killed, allow restart
+  if (existingTurns.length === 0) {
+    const staleMs = Date.now() - new Date(proposal.updated_at).getTime();
+    if (staleMs > 90_000) {
+      // Reset status so /debate/start can be called again
+      await dbUpdateProposal(id, { status: "Approved" });
+      return new Response(JSON.stringify({ error: "Debate timed out — please restart" }), { status: 400 });
+    }
+  }
   if (existingTurns.length > 0) {
     const stream = new ReadableStream({
       async start(controller) {

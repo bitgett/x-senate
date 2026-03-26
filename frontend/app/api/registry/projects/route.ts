@@ -2,6 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { getRegistryProjects } from "@/lib/contract";
 import { dbUpsertProjectMeta, dbListProjectsMeta, initSchema } from "@/lib/db";
 
+const XLAYER_RPC = "https://rpc.xlayer.tech";
+
+async function verifyTxSuccess(txHash: string): Promise<boolean> {
+  try {
+    const res = await fetch(XLAYER_RPC, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getTransactionReceipt", params: [txHash] }),
+      signal: AbortSignal.timeout(8000),
+    });
+    const data = await res.json();
+    return data.result?.status === "0x1";
+  } catch { return false; }
+}
+
 const XSEN_PROJECT = {
   project_id: "XSEN",
   name: "X-Senate",
@@ -71,6 +86,17 @@ export async function POST(req: NextRequest) {
     }
 
     const pid = project_id.trim().toUpperCase();
+
+    // Verify tx receipt before accepting registration
+    if (tx_hash?.startsWith("0x")) {
+      const confirmed = await verifyTxSuccess(tx_hash);
+      if (!confirmed) {
+        return NextResponse.json(
+          { detail: "Transaction not found or failed on-chain. Wait for confirmation and retry." },
+          { status: 400 }
+        );
+      }
+    }
 
     await dbUpsertProjectMeta({
       project_id:    pid,

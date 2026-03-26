@@ -12,10 +12,25 @@ export const maxDuration = 60;
  * This API returns the threshold so the frontend can warn users upfront.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { dbCreateProposal, dbIsPaymentHashUsed, dbMarkPaymentHashUsed, initSchema } from "@/lib/db";
+import { dbCreateProposal, dbIsPaymentHashUsed, dbMarkPaymentHashUsed, dbGetProjectMeta, initSchema } from "@/lib/db";
 import { claudeCompleteJson } from "@/lib/agents";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 import { hasOkxKeys, okxGetTokenPrice, okxX402Verify } from "@/lib/okx";
+import { getRegistryProjects } from "@/lib/contract";
+
+async function isValidProjectId(pid: string): Promise<boolean> {
+  if (pid === "XSEN") return true;
+  try {
+    const [meta, onchain] = await Promise.all([
+      dbGetProjectMeta(pid).catch(() => null),
+      getRegistryProjects().catch(() => []),
+    ]);
+    if (meta) return true;
+    return (onchain as any[]).some(
+      p => (p.projectId ?? p.project_id)?.toUpperCase() === pid
+    );
+  } catch { return false; }
+}
 
 const PROPOSAL_THRESHOLD_XSEN = 1000; // must match governor contract
 
@@ -147,6 +162,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Validate project_id against registry
+    const pid = (project_id ?? "XSEN").trim().toUpperCase();
+    if (!await isValidProjectId(pid)) {
+      return NextResponse.json(
+        { detail: `Project "${pid}" is not registered in X-Senate` },
+        { status: 400 }
+      );
+    }
+
     // ── Sentinel feasibility review ──────────────────────────────────────────
     const sentinelPrompt = `Review this manually submitted governance proposal:
 
@@ -189,7 +213,7 @@ Respond with JSON:
 
     // ── Save as Draft ────────────────────────────────────────────────────────
     const proposal = await dbCreateProposal({
-      project_id: project_id ?? "XSEN",
+      project_id: pid,
       title,
       summary,
       motivation,
