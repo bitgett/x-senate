@@ -90,8 +90,7 @@ export default function GovernancePage() {
   const loadPositions = useCallback(async () => {
     if (!wallet || !walletType) return;
     try {
-      const raw = rawProvider();
-      const provider = new ethers.BrowserProvider(raw, { chainId: 196, name: "xlayer" });
+      const provider = new ethers.JsonRpcProvider("https://rpc.xlayer.tech");
       const staking = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, provider);
       const pos = await staking.getUserPositions(wallet).catch(() => []);
       const parsed = pos.map((p: any) => ({
@@ -101,7 +100,7 @@ export default function GovernancePage() {
       setPositions(parsed);
       setDelegate(parsed.find((p: any) => p.active && p.delegatedAgent)?.delegatedAgent ?? null);
     } catch (e) { console.error(e); }
-  }, [wallet, walletType, rawProvider]);
+  }, [wallet, walletType]);
 
   useEffect(() => {
     loadPositions();

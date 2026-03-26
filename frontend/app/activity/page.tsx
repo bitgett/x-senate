@@ -39,7 +39,7 @@ function fmt(val: number): string {
 }
 
 export default function ActivityPage() {
-  const { wallet, walletType, openModal, rawProvider } = useWallet();
+  const { wallet, walletType, openModal } = useWallet();
 
   // On-chain state
   const [xsenBal, setXsenBal]     = useState(0);
@@ -57,7 +57,7 @@ export default function ActivityPage() {
 
   const loadChainData = useCallback(async (addr: string) => {
     try {
-      const provider = new ethers.BrowserProvider(rawProvider(), { chainId: 196, name: "xlayer" });
+      const provider = new ethers.JsonRpcProvider("https://rpc.xlayer.tech");
       const token   = new ethers.Contract(TOKEN_ADDRESS,   TOKEN_ABI,   provider);
       const staking = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, provider);
       const [bal, vp] = await Promise.all([
@@ -77,7 +77,7 @@ export default function ActivityPage() {
         accReward: Number(ethers.formatEther(p.accReward)),
       })));
     } catch (e) { console.error(e); }
-  }, [rawProvider]);
+  }, []);
 
   const loadTxHistory = useCallback(async (addr: string) => {
     setLoadingTx(true);

@@ -135,8 +135,8 @@ export default function StakePage() {
   const loadWalletData = useCallback(async () => {
     if (!wallet || !walletType) return;
     try {
-      const raw = rawProvider();
-      const provider = new ethers.BrowserProvider(raw, { chainId: 196, name: "xlayer" });
+      // Use JsonRpcProvider for reads — BrowserProvider on X Layer triggers ENS lookup
+      const provider = new ethers.JsonRpcProvider("https://rpc.xlayer.tech");
       const token   = new ethers.Contract(TOKEN_ADDRESS,   TOKEN_ABI,   provider);
       const stk     = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, provider);
       const [bal, vp] = await Promise.all([
@@ -160,7 +160,7 @@ export default function StakePage() {
         })));
       } catch (e) { console.error("getPositions failed:", e); setPositions([]); }
     } catch (e) { console.error(e); }
-  }, [wallet, walletType, rawProvider]);
+  }, [wallet, walletType]);
 
   // Load wallet data whenever wallet changes
   useEffect(() => {

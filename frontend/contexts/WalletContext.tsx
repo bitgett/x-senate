@@ -38,11 +38,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [connectError, setConnectError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
 
-  const fetchVP = useCallback(async (address: string, type: "metamask" | "okx") => {
+  const fetchVP = useCallback(async (address: string) => {
     try {
-      const raw = type === "okx" ? (window as any).okxwallet : (window as any).ethereum;
-      if (!raw) return;
-      const provider = new ethers.BrowserProvider(raw, { chainId: 196, name: "xlayer" });
+      const provider = new ethers.JsonRpcProvider("https://rpc.xlayer.tech");
       const staking = new ethers.Contract(STAKING_ADDRESS, VP_ABI, provider);
       const vp = await staking.getEffectiveVP(address).catch(() => 0n);
       setVP(Number(ethers.formatEther(vp)));
@@ -56,7 +54,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (saved?.address && saved?.type) {
         setWallet(saved.address);
         setWalletType(saved.type);
-        fetchVP(saved.address, saved.type);
+        fetchVP(saved.address);
       }
     } catch {}
   }, [fetchVP]);
@@ -81,7 +79,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setWallet(addr);
       setWalletType(type);
       localStorage.setItem(LS_KEY, JSON.stringify({ address: addr, type }));
-      await fetchVP(addr, type);
+      await fetchVP(addr);
     } catch (e: any) {
       const msg = e?.code === 4001 ? "연결이 거부되었습니다." : "지갑 연결에 실패했습니다. 다시 시도해주세요.";
       setConnectError(msg);
@@ -101,7 +99,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }
 
   async function refreshVP() {
-    if (wallet && walletType) await fetchVP(wallet, walletType);
+    if (wallet) await fetchVP(wallet);
   }
 
   return (
