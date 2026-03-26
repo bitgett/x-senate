@@ -24,7 +24,7 @@ interface UGAAgent {
 
 const STAKING_ADDRESS = process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS ?? "0x9CD9eF69c4EE176c8115E4BCf6c604Eb46599502";
 const STAKING_ABI = [
-  "function getPositions(address user) view returns (tuple(uint256 id, uint256 amount, uint8 tier, uint256 lockEnd, string delegatedAgent, bool active, uint256 accReward)[])",
+  "function getUserPositions(address user) view returns (tuple(uint256 id, address owner, uint256 amount, uint8 tier, uint256 lockEnd, uint256 stakedAt, uint256 lastRewardAt, uint256 accReward, string delegatedAgent, bool active)[])",
   "function delegatePosition(uint256 positionId, string agentName) external",
 ];
 
@@ -260,7 +260,7 @@ export default function AgentsPage() {
       const provider = new ethers.BrowserProvider(raw);
       const signer = await provider.getSigner();
       const staking = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI, signer);
-      const positions = await staking.getPositions(wallet).catch(() => []);
+      const positions = await staking.getUserPositions(wallet).catch(() => []);
       const activePos = positions.find((p: any) => p.active);
       if (!activePos) { setTxStatus("No active staking position. Stake XSEN first."); setDelegating(null); return; }
       const tx = await staking.delegatePosition(activePos.id, agentName);
