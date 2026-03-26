@@ -98,19 +98,23 @@ export async function GET(
     const [
       transfersFrom,
       transfersTo,
-      stakingLogs,
-      governorLogs,
+      stakingT1,
+      stakingT2,
+      governorT1,
+      governorT2,
     ] = await Promise.all([
       getLogs({ address: TOKEN_ADDR,    fromBlock, toBlock, topics: ["0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef", paddedUser] }),
       getLogs({ address: TOKEN_ADDR,    fromBlock, toBlock, topics: ["0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef", null, paddedUser] }),
       getLogs({ address: STAKING_ADDR,  fromBlock, toBlock, topics: [null, paddedUser] }),
+      getLogs({ address: STAKING_ADDR,  fromBlock, toBlock, topics: [null, null, paddedUser] }),
       getLogs({ address: GOVERNOR_ADDR, fromBlock, toBlock, topics: [null, paddedUser] }),
+      getLogs({ address: GOVERNOR_ADDR, fromBlock, toBlock, topics: [null, null, paddedUser] }),
     ]);
 
     // De-duplicate by txHash+logIndex
     const seen = new Set<string>();
     const allLogs: any[] = [];
-    for (const log of [...transfersFrom, ...transfersTo, ...stakingLogs, ...governorLogs]) {
+    for (const log of [...transfersFrom, ...transfersTo, ...stakingT1, ...stakingT2, ...governorT1, ...governorT2]) {
       const key = `${log.transactionHash}-${log.logIndex}`;
       if (!seen.has(key)) { seen.add(key); allLogs.push(log); }
     }

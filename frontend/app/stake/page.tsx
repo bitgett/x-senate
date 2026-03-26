@@ -636,10 +636,19 @@ export default function StakePage() {
                             </div>
 
                             {/* Unstake button / cooldown state */}
-                            {p.active && !locked && (
+                            {p.active && (
                               <div className="mt-3">
-                                {Number(p.tier) === 0 ? (
-                                  /* Flexible: instant unstake, no cooldown */
+                                {p.tierId === 0 ? (
+                                  /* Flexible: instant unstake anytime, no cooldown */
+                                  <button
+                                    onClick={() => completeUnstake(p.id)}
+                                    disabled={unstaking === p.id}
+                                    className="w-full text-xs font-semibold bg-red-900/20 hover:bg-red-900/30 disabled:opacity-40 border border-red-700/40 text-red-300 py-2 rounded-lg transition-colors"
+                                  >
+                                    {unstaking === p.id ? "Unstaking..." : "Unstake"}
+                                  </button>
+                                ) : !locked ? (
+                                  /* Lock period expired naturally → instant unstake, no cooldown */
                                   <button
                                     onClick={() => completeUnstake(p.id)}
                                     disabled={unstaking === p.id}
@@ -648,30 +657,33 @@ export default function StakePage() {
                                     {unstaking === p.id ? "Unstaking..." : "Unstake"}
                                   </button>
                                 ) : inCooldown ? (
+                                  /* Early exit cooldown in progress */
                                   <div className="text-center border border-yellow-700/40 bg-yellow-900/10 rounded-lg py-2">
-                                    <div className="text-xs text-yellow-400 font-semibold">Cooldown: {fmtCountdown(remaining)}</div>
-                                    <div className="text-[10px] text-gray-600 mt-0.5">Unstake available after 7 days</div>
+                                    <div className="text-xs text-yellow-400 font-semibold">Early Exit Cooldown: {fmtCountdown(remaining)}</div>
+                                    <div className="text-[10px] text-gray-600 mt-0.5">Unstake available in 7 days</div>
                                   </div>
                                 ) : cooldownDone ? (
+                                  /* Cooldown finished → complete unstake */
                                   <button
                                     onClick={() => completeUnstake(p.id)}
                                     disabled={unstaking === p.id}
                                     className="w-full text-xs font-semibold bg-red-900/20 hover:bg-red-900/30 disabled:opacity-40 border border-red-700/40 text-red-300 py-2 rounded-lg transition-colors"
                                   >
-                                    {unstaking === p.id ? "Unstaking..." : "Complete Unstake"}
+                                    {unstaking === p.id ? "Unstaking..." : "Complete Early Exit"}
                                   </button>
                                 ) : (
+                                  /* Still locked, no cooldown started → offer early exit */
                                   <button
                                     onClick={() => {
                                       if (wallet) {
                                         startCooldown(wallet, p.id);
                                         setTick(t => t + 1);
-                                        setTxStatus("Unstake cooldown started (7 days)");
+                                        setTxStatus("Early exit requested — 7-day cooldown started");
                                       }
                                     }}
-                                    className="w-full text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 py-2 rounded-lg transition-colors"
+                                    className="w-full text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 py-2 rounded-lg transition-colors"
                                   >
-                                    Request Unstake
+                                    Early Exit (7-day cooldown)
                                   </button>
                                 )}
                               </div>
