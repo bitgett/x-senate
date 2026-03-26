@@ -20,6 +20,35 @@ const RPC_PROVIDER  = new ethers.JsonRpcProvider("https://rpc.xlayer.tech");
 async function sendTx(rawProv: any, from: string, to: string, data: string): Promise<string> {
   return await rawProv.request({ method: "eth_sendTransaction", params: [{ from, to, data, gas: "0x3D090" }] });
 }
+async function signTransferAuthorization(
+  rawProv: any, from: string, to: string, value: number,
+  tokenAddress: string, chainId: number, tokenName: string, tokenVersion: string,
+) {
+  const validAfter  = "0";
+  const validBefore = String(Math.floor(Date.now() / 1000) + 300);
+  const nonce       = ethers.hexlify(ethers.randomBytes(32));
+  const typedData = {
+    types: {
+      EIP712Domain: [
+        { name: "name", type: "string" }, { name: "version", type: "string" },
+        { name: "chainId", type: "uint256" }, { name: "verifyingContract", type: "address" },
+      ],
+      TransferWithAuthorization: [
+        { name: "from", type: "address" }, { name: "to", type: "address" },
+        { name: "value", type: "uint256" }, { name: "validAfter", type: "uint256" },
+        { name: "validBefore", type: "uint256" }, { name: "nonce", type: "bytes32" },
+      ],
+    },
+    domain: { name: tokenName, version: tokenVersion, chainId, verifyingContract: tokenAddress },
+    primaryType: "TransferWithAuthorization",
+    message: { from, to, value: String(value), validAfter, validBefore, nonce },
+  };
+  const signature: string = await rawProv.request({
+    method: "eth_signTypedData_v4",
+    params: [from, JSON.stringify(typedData)],
+  });
+  return { x402Version: 1, scheme: "exact", payload: { signature, authorization: { from, to, value: String(value), validAfter, validBefore, nonce } } };
+}
 async function waitTx(hash: string): Promise<void> {
   for (let i = 0; i < 60; i++) {
     const r = await RPC_PROVIDER.getTransactionReceipt(hash).catch(() => null);
@@ -88,8 +117,8 @@ export default function GovernancePage() {
   const [form, setForm]                 = useState(EMPTY_FORM);
   const [submitting, setSubmitting]     = useState(false);
   const [submitResult, setSubmitResult] = useState<any>(null);
-  const [submitPayStep, setSubmitPayStep] = useState<"idle" | "fetching" | "paying" | "verifying" | "done">("idle");
-  const [submitQuote, setSubmitQuote]   = useState<{ xsen_amount: number; usd_fee: number; xsen_price_usd: number; xsen_amount_wei: string; treasury: string; xsen_token: string } | null>(null);
+  const [submitPayStep, setSubmitPayStep] = useState<"idle" | "fetching" | "signing" | "settling" | "done">("idle");
+  const [submitQuote, setSubmitQuote]   = useState<{ usdt_amount: number; usd_fee: number } | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -387,13 +416,13 @@ export default function GovernancePage() {
                     </div>
                     {submitQuote && (
                       <div className="text-yellow-300/70">
-                        Fee: <span className="font-bold text-yellow-300">{Math.ceil(submitQuote.xsen_amount).toLocaleString()} XSEN</span>
-                        {" "}≈ ${submitQuote.usd_fee} · XSEN @ ${submitQuote.xsen_price_usd.toFixed(4)}
+                        Fee: <span className="font-bold text-yellow-300">${submitQuote.usd_fee} USDT</span>
+                        {" "}· Sign in wallet, no gas required
                       </div>
                     )}
                     <div className="flex gap-3 text-[11px]">
-                      {["fetching", "paying", "verifying", "done"].map((s, i) => {
-                        const steps = ["fetching", "paying", "verifying", "done"];
+                      {["fetching", "signing", "settling", "done"].map((s, i) => {
+                        const steps = ["fetching", "signing", "settling", "done"];
                         const idx = steps.indexOf(submitPayStep);
                         const done = i < idx;
                         const active = i === idx;
@@ -413,28 +442,37 @@ export default function GovernancePage() {
                     setSubmitPayStep("fetching");
                     setSubmitResult(null);
                     try {
-                      // Step 1: Get x402 quote
+                      // Step 1: Get $1 USDT quote
                       const quoteRes = await fetch("/api/x402/quote");
                       const quote = await quoteRes.json();
-                      setSubmitQuote(quote);
-                      setSubmitPayStep("paying");
+                      setSubmitQuote({ usdt_amount: quote.usdt_amount, usd_fee: quote.usd_fee });
+                      setSubmitPayStep("signing");
 
-                      // Step 2: Pay XSEN to treasury
-                      const TOKEN_TRANSFER_IFACE = new ethers.Interface(["function transfer(address to, uint256 amount) returns (bool)"]);
-                      const payTxHash = await sendTx(rawProvider(), wallet!, quote.xsen_token,
-                        TOKEN_TRANSFER_IFACE.encodeFunctionData("transfer", [quote.treasury, BigInt(quote.xsen_amount_wei)]));
-                      setSubmitPayStep("verifying");
-                      await waitTx(payTxHash);
+                      // Step 2: Sign EIP-3009 transferWithAuthorization (off-chain, no gas)
+                      const paymentPayload = await signTransferAuthorization(
+                        rawProvider(), wallet!, quote.treasury,
+                        quote.usdt_amount, quote.usdt_token,
+                        quote.chain_id ?? 196,
+                        quote.token_name ?? "Tether USD",
+                        quote.token_version ?? "1",
+                      );
+                      setSubmitPayStep("settling");
 
-                      // Step 3: Submit proposal with payment proof
-                      setSubmitPayStep("done");
+                      // Step 3: Submit — server calls OKX x402/verify + settle + Sentinel
                       const res = await fetch("/api/proposals/submit", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ ...form, submitter_address: wallet ?? undefined, payment_tx_hash: payTxHash }),
+                        body: JSON.stringify({
+                          ...form,
+                          submitter_address: wallet ?? undefined,
+                          payment_payload:   paymentPayload,
+                          token_name:        quote.token_name,
+                          token_version:     quote.token_version,
+                        }),
                       });
+                      setSubmitPayStep("done");
                       const data = await res.json();
-                      setSubmitResult({ ...data, status: res.status, payment_tx: payTxHash });
+                      setSubmitResult({ ...data, status: res.status });
                       if (res.status === 201) { const updated = await fetchProposals(); setProposals(updated); }
                     } catch (e: any) {
                       setSubmitResult({ approved: false, feedback: e.message?.slice(0, 120) ?? "Error" });
@@ -446,11 +484,11 @@ export default function GovernancePage() {
                   className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors"
                 >
                   {submitting
-                    ? submitPayStep === "fetching"  ? "Getting price quote..."
-                    : submitPayStep === "paying"    ? "Confirm XSEN payment in wallet..."
-                    : submitPayStep === "verifying" ? "Verifying payment on-chain..."
+                    ? submitPayStep === "fetching"  ? "Getting payment quote..."
+                    : submitPayStep === "signing"   ? "Sign payment in wallet..."
+                    : submitPayStep === "settling"  ? "Settling payment via OKX..."
                     : "Sentinel is reviewing..."
-                    : wallet ? "Pay & Submit (~$10 in XSEN)" : "Connect Wallet to Submit"}
+                    : wallet ? "Sign & Submit ($1 USDT)" : "Connect Wallet to Submit"}
                 </button>
               </div>
             ) : (

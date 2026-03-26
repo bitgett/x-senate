@@ -626,8 +626,8 @@ export default function AgentsPage() {
                   </div>
                   <div className="shrink-0 flex items-center gap-1.5 bg-yellow-900/20 border border-yellow-700/40 rounded-full px-3 py-1.5">
                     <span className="text-yellow-400 text-xs">⚡</span>
-                    <span className="text-yellow-400 text-xs font-bold">~$10</span>
-                    <span className="text-yellow-600 text-[11px]">in XSEN</span>
+                    <span className="text-yellow-400 text-xs font-bold">$1</span>
+                    <span className="text-yellow-600 text-[11px]">USDT</span>
                   </div>
                 </div>
               </div>
@@ -923,10 +923,10 @@ export default function AgentsPage() {
                     : payStep === "signing"    ? "Sign payment in wallet..."
                     : payStep === "settling"   ? "Settling payment via OKX..."
                     : "Registering agent..."
-                    : wallet ? `Deploy ${agentName || "Agent"} to X-Senate — ~$10 in XSEN` : "Connect Wallet to Register"}
+                    : wallet ? `Deploy ${agentName || "Agent"} to X-Senate — $1 USDT` : "Connect Wallet to Register"}
                 </button>
                 <p className="text-[11px] text-gray-700 text-center">
-                  One-time ~$10 fee in XSEN · Name must be unique · Earn 3% creator rewards on delegations
+                  One-time $1 USDT fee · Sign in wallet, no gas · Name must be unique · Earn 3% creator rewards on delegations
                 </p>
               </div>
             </div>
