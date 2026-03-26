@@ -5,9 +5,12 @@ import Link from "next/link";
 import { ethers } from "ethers";
 import { useWallet } from "@/contexts/WalletContext";
 
-const REGISTRY_ADDRESS = process.env.NEXT_PUBLIC_XSEN_REGISTRY_ADDRESS  ?? "0xFd11e955CCEA6346911F33119B3bf84b3f0E6678";
-const XSEN_TOKEN       = process.env.NEXT_PUBLIC_XSEN_TOKEN_ADDRESS      ?? "0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b";
-const XSEN_STAKING     = process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS    ?? "0xc8FD7B12De6bFb10dF3eaCb38AAc09CBbeb25bFD";
+function safeAddr(env: string | undefined, fallback: string): string {
+  try { return ethers.getAddress((env ?? fallback).trim().toLowerCase()); } catch { return fallback; }
+}
+const REGISTRY_ADDRESS = safeAddr(process.env.NEXT_PUBLIC_XSEN_REGISTRY_ADDRESS,  "0xFd11e955CCEA6346911F33119B3bf84b3f0E6678");
+const XSEN_TOKEN       = safeAddr(process.env.NEXT_PUBLIC_XSEN_TOKEN_ADDRESS,      "0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b");
+const XSEN_STAKING     = safeAddr(process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS,    "0xc8FD7B12De6bFb10dF3eaCb38AAc09CBbeb25bFD");
 
 const TOKEN_ABI    = ["function balanceOf(address) view returns (uint256)", "function approve(address,uint256) returns (bool)"];
 const REGISTRY_ABI = ["function registerProject(string,string,address,address) external"];
@@ -15,7 +18,7 @@ const TOKEN_IFACE    = new ethers.Interface(TOKEN_ABI);
 const REGISTRY_IFACE = new ethers.Interface(REGISTRY_ABI);
 const RPC_PROVIDER   = new ethers.JsonRpcProvider("https://rpc.xlayer.tech");
 async function sendTx(rawProv: any, from: string, to: string, data: string): Promise<string> {
-  return await rawProv.request({ method: "eth_sendTransaction", params: [{ from, to, data }] });
+  return await rawProv.request({ method: "eth_sendTransaction", params: [{ from, to, data, gas: "0x3D090" }] });
 }
 async function waitTx(hash: string): Promise<void> {
   for (let i = 0; i < 60; i++) {

@@ -6,7 +6,10 @@ import { fetchProposals, fetchPlatformStats } from "@/lib/api";
 import { Proposal, STATUS_LABELS } from "@/types";
 import { useWallet } from "@/contexts/WalletContext";
 
-const STAKING_ADDRESS = process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS ?? "0xc8FD7B12De6bFb10dF3eaCb38AAc09CBbeb25bFD";
+function safeAddr(env: string | undefined, fallback: string): string {
+  try { return ethers.getAddress((env ?? fallback).trim().toLowerCase()); } catch { return fallback; }
+}
+const STAKING_ADDRESS = safeAddr(process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS, "0xc8FD7B12De6bFb10dF3eaCb38AAc09CBbeb25bFD");
 const STAKING_ABI = [
   "function getEffectiveVP(address user) view returns (uint256)",
   "function getUserPositions(address user) view returns (tuple(uint256 id, address owner, uint256 amount, uint8 tier, uint256 lockEnd, uint256 stakedAt, uint256 lastRewardAt, uint256 accReward, string delegatedAgent, bool active)[])",
@@ -15,7 +18,7 @@ const STAKING_ABI = [
 const STAKING_IFACE = new ethers.Interface(STAKING_ABI);
 const RPC_PROVIDER  = new ethers.JsonRpcProvider("https://rpc.xlayer.tech");
 async function sendTx(rawProv: any, from: string, to: string, data: string): Promise<string> {
-  return await rawProv.request({ method: "eth_sendTransaction", params: [{ from, to, data }] });
+  return await rawProv.request({ method: "eth_sendTransaction", params: [{ from, to, data, gas: "0x3D090" }] });
 }
 async function waitTx(hash: string): Promise<void> {
   for (let i = 0; i < 60; i++) {

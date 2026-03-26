@@ -3,8 +3,11 @@ import { useEffect, useState, useCallback } from "react";
 import { ethers } from "ethers";
 import { useWallet } from "@/contexts/WalletContext";
 
-const STAKING_ADDRESS = process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS ?? "0xc8FD7B12De6bFb10dF3eaCb38AAc09CBbeb25bFD";
-const TOKEN_ADDRESS   = process.env.NEXT_PUBLIC_XSEN_TOKEN_ADDRESS   ?? "0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b";
+function safeAddr(env: string | undefined, fallback: string): string {
+  try { return ethers.getAddress((env ?? fallback).trim().toLowerCase()); } catch { return fallback; }
+}
+const STAKING_ADDRESS = safeAddr(process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS, "0xc8FD7B12De6bFb10dF3eaCb38AAc09CBbeb25bFD");
+const TOKEN_ADDRESS   = safeAddr(process.env.NEXT_PUBLIC_XSEN_TOKEN_ADDRESS,   "0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b");
 
 const STAKING_ABI = [
   "function getEffectiveVP(address user) view returns (uint256)",
@@ -24,10 +27,11 @@ const TOKEN_IFACE   = new ethers.Interface(TOKEN_ABI);
 const RPC_PROVIDER  = new ethers.JsonRpcProvider("https://rpc.xlayer.tech");
 
 // Send a transaction via raw EIP-1193 (no BrowserProvider = no ENS lookup)
+// gas is explicit so the wallet doesn't call eth_estimateGas (which can fail and produce misleading errors)
 async function sendTx(rawProv: any, from: string, to: string, data: string): Promise<string> {
   return await rawProv.request({
     method: "eth_sendTransaction",
-    params: [{ from, to, data }],
+    params: [{ from, to, data, gas: "0x3D090" }], // 250 000 gas
   });
 }
 

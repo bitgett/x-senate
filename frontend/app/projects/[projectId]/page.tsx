@@ -9,7 +9,7 @@ import { STATUS_LABELS } from "@/types";
 const TOKEN_IFACE = new ethers.Interface(["function transfer(address to, uint256 amount) returns (bool)"]);
 const RPC_PROVIDER = new ethers.JsonRpcProvider("https://rpc.xlayer.tech");
 async function sendTx(rawProv: any, from: string, to: string, data: string): Promise<string> {
-  return await rawProv.request({ method: "eth_sendTransaction", params: [{ from, to, data }] });
+  return await rawProv.request({ method: "eth_sendTransaction", params: [{ from, to, data, gas: "0x3D090" }] });
 }
 async function waitTx(hash: string): Promise<void> {
   for (let i = 0; i < 60; i++) {

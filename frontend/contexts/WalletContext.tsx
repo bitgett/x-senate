@@ -2,7 +2,10 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { ethers } from "ethers";
 
-const STAKING_ADDRESS = process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS ?? "0xc8FD7B12De6bFb10dF3eaCb38AAc09CBbeb25bFD";
+function safeAddr(env: string | undefined, fallback: string): string {
+  try { return ethers.getAddress((env ?? fallback).trim().toLowerCase()); } catch { return fallback; }
+}
+const STAKING_ADDRESS = safeAddr(process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS, "0xc8FD7B12De6bFb10dF3eaCb38AAc09CBbeb25bFD");
 const VP_ABI = ["function getEffectiveVP(address) view returns (uint256)"];
 const XLAYER = {
   chainId: "0xc4",
