@@ -5,28 +5,46 @@ import Link from "next/link";
 import { ethers } from "ethers";
 import { useWallet } from "@/contexts/WalletContext";
 
-function safeAddr(env: string | undefined, fallback: string): string {
-  try { return ethers.getAddress((env ?? fallback).trim().toLowerCase()); } catch { return fallback; }
-}
-const REGISTRY_ADDRESS = safeAddr(process.env.NEXT_PUBLIC_XSEN_REGISTRY_ADDRESS,  "0xFd11e955CCEA6346911F33119B3bf84b3f0E6678");
-const XSEN_TOKEN       = safeAddr(process.env.NEXT_PUBLIC_XSEN_TOKEN_ADDRESS,      "0x1bAB744c4c98D844984e297744Cb6b4E24e2E89b");
-const XSEN_STAKING     = safeAddr(process.env.NEXT_PUBLIC_XSEN_STAKING_ADDRESS,    "0xc8FD7B12De6bFb10dF3eaCb38AAc09CBbeb25bFD");
-
-const TOKEN_ABI    = ["function balanceOf(address) view returns (uint256)", "function approve(address,uint256) returns (bool)"];
-const REGISTRY_ABI = ["function registerProject(string,string,address,address) external"];
-const TOKEN_IFACE    = new ethers.Interface(TOKEN_ABI);
-const REGISTRY_IFACE = new ethers.Interface(REGISTRY_ABI);
-const RPC_PROVIDER   = new ethers.JsonRpcProvider("https://rpc.xlayer.tech");
-async function sendTx(rawProv: any, from: string, to: string, data: string): Promise<string> {
-  return await rawProv.request({ method: "eth_sendTransaction", params: [{ from, to, data, gas: "0x3D090" }] });
-}
-async function waitTx(hash: string): Promise<void> {
-  for (let i = 0; i < 60; i++) {
-    const r = await RPC_PROVIDER.getTransactionReceipt(hash).catch(() => null);
-    if (r) return;
-    await new Promise(res => setTimeout(res, 2000));
-  }
-  throw new Error("Transaction not confirmed after 2 minutes");
+async function signTransferAuthorization(
+  rawProv: any, from: string, to: string, value: number,
+  tokenAddress: string, chainId: number, tokenName: string, tokenVersion: string,
+) {
+  const validAfter  = "0";
+  const validBefore = String(Math.floor(Date.now() / 1000) + 300);
+  const nonce       = ethers.hexlify(ethers.randomBytes(32));
+  const typedData = {
+    types: {
+      EIP712Domain: [
+        { name: "name",              type: "string"  },
+        { name: "version",           type: "string"  },
+        { name: "chainId",           type: "uint256" },
+        { name: "verifyingContract", type: "address" },
+      ],
+      TransferWithAuthorization: [
+        { name: "from",        type: "address" },
+        { name: "to",          type: "address" },
+        { name: "value",       type: "uint256" },
+        { name: "validAfter",  type: "uint256" },
+        { name: "validBefore", type: "uint256" },
+        { name: "nonce",       type: "bytes32" },
+      ],
+    },
+    domain: { name: tokenName, version: tokenVersion, chainId, verifyingContract: tokenAddress },
+    primaryType: "TransferWithAuthorization",
+    message: { from, to, value: String(value), validAfter, validBefore, nonce },
+  };
+  const signature: string = await rawProv.request({
+    method: "eth_signTypedData_v4",
+    params: [from, JSON.stringify(typedData)],
+  });
+  return {
+    x402Version: 1,
+    scheme:      "exact",
+    payload: {
+      signature,
+      authorization: { from, to, value: String(value), validAfter, validBefore, nonce },
+    },
+  };
 }
 
 function truncateAddr(addr: string) {
@@ -34,7 +52,7 @@ function truncateAddr(addr: string) {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
-type RegStep = "idle" | "checking" | "approving" | "registering" | "saving" | "done";
+type RegStep = "idle" | "fetching" | "signing" | "saving" | "done";
 
 export default function ProjectsPage() {
   const router = useRouter();
@@ -88,70 +106,62 @@ export default function ProjectsPage() {
     const pid = formId.trim().toUpperCase();
 
     try {
-      const raw = rawProvider();
+      // Step 1: Get $1 USDT quote
+      setStep("fetching");
+      const quoteRes = await fetch("/api/x402/quote");
+      const quote    = await quoteRes.json();
 
-      // Step 1: Check XSEN balance
-      setStep("checking");
-      const token = new ethers.Contract(XSEN_TOKEN, TOKEN_ABI, RPC_PROVIDER);
-      const bal = await token.balanceOf(wallet);
-      const fee = ethers.parseEther("1000");
-      if (bal < fee) {
-        setRegError(`Insufficient XSEN. Need 1,000 XSEN, have ${Number(ethers.formatEther(bal)).toFixed(0)} XSEN.`);
-        setStep("idle"); return;
-      }
+      // Step 2: Sign EIP-3009 transferWithAuthorization (off-chain, no gas)
+      setStep("signing");
+      const paymentPayload = await signTransferAuthorization(
+        rawProvider(), wallet, quote.treasury,
+        quote.usdt_amount, quote.usdt_token,
+        quote.chain_id ?? 196,
+        quote.token_name  ?? "Tether USD",
+        quote.token_version ?? "1",
+      );
 
-      // Step 2: Approve Registry to spend 1000 XSEN
-      setStep("approving");
-      const approveHash = await sendTx(raw, wallet, XSEN_TOKEN,
-        TOKEN_IFACE.encodeFunctionData("approve", [REGISTRY_ADDRESS, fee]));
-      await waitTx(approveHash);
-
-      // Step 3: Call Registry.registerProject on-chain
-      setStep("registering");
-      const registerHash = await sendTx(raw, wallet, REGISTRY_ADDRESS,
-        REGISTRY_IFACE.encodeFunctionData("registerProject", [pid, formName.trim(), formToken.trim(), XSEN_STAKING]));
-      await waitTx(registerHash);
-
-      // Step 4: Save social meta to DB
+      // Step 3: Register — server calls OKX x402/verify + settle + saves to DB
       setStep("saving");
-      await fetch("/api/registry/projects", {
+      const res = await fetch("/api/registry/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          project_id:    pid,
-          name:          formName.trim(),
-          description:   formDesc.trim() || null,
-          token_address: formToken.trim(),
-          twitter:       formTwitter.trim() || null,
-          discord:       formDiscord.trim() || null,
-          telegram:      formTelegram.trim() || null,
-          registrant:    wallet,
-          tx_hash:       registerHash,
-          logo_base64:   logoBase64 || null,
+          project_id:      pid,
+          name:            formName.trim(),
+          description:     formDesc.trim() || null,
+          token_address:   formToken.trim(),
+          twitter:         formTwitter.trim() || null,
+          discord:         formDiscord.trim() || null,
+          telegram:        formTelegram.trim() || null,
+          registrant:      wallet,
+          payment_payload: paymentPayload,
+          token_name:      quote.token_name,
+          token_version:   quote.token_version,
+          logo_base64:     logoBase64 || null,
         }),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail ?? "Registration failed");
 
       setStep("done");
-      setRegResult({ project_id: pid, tx_hash: registerHash });
-      // Reload project list
+      setRegResult({ project_id: pid, tx_hash: data.payment_tx_hash });
       fetch("/api/registry/projects").then(r => r.json()).then(d => { if (d.projects) setProjects(d.projects); });
-      // Navigate to new project page after 2s
       setTimeout(() => router.push(`/projects/${pid}`), 2000);
 
     } catch (e: any) {
-      const msg = e?.code === 4001 ? "Transaction rejected." : (e?.reason ?? e?.message ?? "Registration failed.");
-      setRegError(msg.slice(0, 120));
+      const msg = e?.code === 4001 ? "Signing rejected." : (e?.message ?? "Registration failed.");
+      setRegError(msg.slice(0, 160));
       setStep("idle");
     }
   }
 
   const stepLabel: Record<RegStep, string> = {
-    idle:       "Register Project — 1,000 XSEN",
-    checking:   "Checking XSEN balance...",
-    approving:  "Approve 1,000 XSEN in wallet...",
-    registering:"Confirm registration tx in wallet...",
-    saving:     "Saving project info...",
-    done:       "✓ Registered!",
+    idle:    "Register Project — $1 USDT",
+    fetching:"Getting quote...",
+    signing: "Sign $1 USDT in wallet... (no gas)",
+    saving:  "Registering project...",
+    done:    "✓ Registered!",
   };
 
   return (
@@ -172,7 +182,7 @@ export default function ProjectsPage() {
           { label: "Registered Projects", value: projects.length || "—" },
           { label: "Genesis AI Agents",   value: "5" },
           { label: "Network",             value: "X Layer" },
-          { label: "Registration Fee",    value: "1,000 XSEN" },
+          { label: "Registration Fee",    value: "$1 USDT" },
         ].map(s => (
           <div key={s.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
             <div className="text-2xl font-bold text-white">{s.value}</div>
@@ -189,7 +199,7 @@ export default function ProjectsPage() {
             <span className="text-2xl">1️⃣</span>
             <div>
               <div className="text-white font-medium mb-1">Register Your Token</div>
-              Submit your X Layer ERC20 address and pay 1,000 XSEN. Fee flows to the XSEN staker ecosystem fund.
+              Submit your X Layer ERC20 address and pay $1 USDT via x402. Off-chain EIP-3009 signature — no gas needed.
             </div>
           </div>
           <div className="flex gap-3">
@@ -276,10 +286,10 @@ export default function ProjectsPage() {
               Bring X-Senate AI governance to your X Layer community.
             </p>
           </div>
-          <div className="shrink-0 flex items-center gap-1.5 bg-yellow-900/20 border border-yellow-700/40 rounded-full px-3 py-1.5">
-            <span className="text-yellow-400 text-xs">⚡</span>
-            <span className="text-yellow-400 text-xs font-bold">1,000 XSEN</span>
-            <span className="text-yellow-600 text-[11px]">fee</span>
+          <div className="shrink-0 flex items-center gap-1.5 bg-green-900/20 border border-green-700/40 rounded-full px-3 py-1.5">
+            <span className="text-green-400 text-xs">💵</span>
+            <span className="text-green-400 text-xs font-bold">$1 USDT</span>
+            <span className="text-green-600 text-[11px]">x402</span>
           </div>
         </div>
 
@@ -415,16 +425,29 @@ export default function ProjectsPage() {
           {regResult && (
             <div className="bg-green-900/30 border border-green-700 rounded-lg p-3 text-sm text-green-300">
               <div className="font-semibold">Project {regResult.project_id} registered!</div>
-              <div className="text-xs mt-1 text-green-500 font-mono">TX: {regResult.tx_hash?.slice(0, 20)}...</div>
+              {regResult.tx_hash && (
+                <div className="text-xs mt-1 text-green-500 font-mono">Payment TX: {regResult.tx_hash.slice(0, 20)}...</div>
+              )}
               <div className="text-xs mt-1 text-green-400">Redirecting to governance page...</div>
             </div>
           )}
 
           {/* Steps indicator */}
           {step !== "idle" && step !== "done" && (
-            <div className="flex items-center gap-2 text-xs text-purple-300 bg-purple-900/20 border border-purple-700/30 rounded-lg p-3">
-              <div className="w-3 h-3 rounded-full border-2 border-purple-400 border-t-transparent animate-spin shrink-0" />
-              {stepLabel[step]}
+            <div className="space-y-2">
+              <div className="flex gap-3 text-[11px]">
+                {(["fetching","signing","saving"] as const).map((s, i) => {
+                  const idx = ["fetching","signing","saving"].indexOf(step as any);
+                  return (
+                    <span key={s} className={i < idx ? "text-green-400" : i === idx ? "text-yellow-300 font-semibold" : "text-gray-600"}>
+                      {i < idx ? "✓" : i === idx ? "→" : "○"} {["Quote","Sign $1 USDT","Register"][i]}
+                    </span>
+                  );
+                })}
+              </div>
+              {step === "signing" && (
+                <p className="text-[10px] text-gray-600">Signing an off-chain authorization. No gas will be charged.</p>
+              )}
             </div>
           )}
 
@@ -437,7 +460,7 @@ export default function ProjectsPage() {
             {!wallet ? "Connect Wallet to Register" : stepLabel[step]}
           </button>
           <p className="text-[11px] text-gray-700 text-center">
-            1,000 XSEN fee flows to XSEN staker ecosystem fund · Name must be unique on-chain
+            $1 USDT · Off-chain EIP-3009 signature · No gas required · Name must be unique
           </p>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRegistryProjects } from "@/lib/contract";
-import { dbUpsertProjectMeta, dbListProjectsMeta, initSchema } from "@/lib/db";
+import { dbUpsertProjectMeta, dbListProjectsMeta, dbIsPaymentHashUsed, dbMarkPaymentHashUsed, initSchema } from "@/lib/db";
+import { hasOkxKeys, okxX402Verify, okxX402Settle } from "@/lib/okx";
 
 const XLAYER_RPC = "https://rpc.xlayer.tech";
 
@@ -73,11 +74,30 @@ export async function GET() {
   }
 }
 
+const USDT_ADDRESS = "0x779ded0c9e1022225f8e0630b35a9b54be713736";
+const TREASURY     = "0x8266D8e3B231dfD16fa21e40Cc3B99F38bC4B6C2";
+const USDT_AMOUNT  = "1000000"; // $1 in 6-decimal units
+
+function buildRequirements(tokenName: string, tokenVersion: string) {
+  return {
+    scheme:            "exact",
+    maxAmountRequired: USDT_AMOUNT,
+    payTo:             TREASURY,
+    asset:             USDT_ADDRESS,
+    extra:             { name: tokenName, version: tokenVersion },
+  };
+}
+
 export async function POST(req: NextRequest) {
   try {
     await initSchema().catch(() => {});
     const body = await req.json();
-    const { project_id, name, description, token_address, twitter, discord, telegram, registrant, tx_hash, logo_base64 } = body;
+    const {
+      project_id, name, description, token_address,
+      twitter, discord, telegram, registrant,
+      payment_payload, token_name, token_version,
+      logo_base64,
+    } = body;
 
     if (!project_id?.trim()) return NextResponse.json({ detail: "project_id required" }, { status: 400 });
     if (!name?.trim())       return NextResponse.json({ detail: "name required" }, { status: 400 });
@@ -87,16 +107,46 @@ export async function POST(req: NextRequest) {
 
     const pid = project_id.trim().toUpperCase();
 
-    // Verify tx receipt before accepting registration
-    if (tx_hash?.startsWith("0x")) {
-      const confirmed = await verifyTxSuccess(tx_hash);
-      if (!confirmed) {
-        return NextResponse.json(
-          { detail: "Transaction not found or failed on-chain. Wait for confirmation and retry." },
-          { status: 400 }
-        );
-      }
+    // ── x402 Payment Gate ────────────────────────────────────────────────────
+    if (!payment_payload) {
+      return NextResponse.json({
+        detail:      "Payment required",
+        x402:        true,
+        usd_fee:     1,
+        usdt_amount: USDT_AMOUNT,
+        treasury:    TREASURY,
+        usdt_token:  USDT_ADDRESS,
+      }, { status: 402 });
     }
+
+    if (!hasOkxKeys()) {
+      return NextResponse.json({ detail: "Payment service unavailable — OKX keys not configured" }, { status: 503 });
+    }
+
+    const nonce: string | undefined = (payment_payload as any)?.payload?.authorization?.nonce;
+    if (!nonce) {
+      return NextResponse.json({ detail: "Invalid payment payload: missing nonce" }, { status: 400 });
+    }
+
+    if (await dbIsPaymentHashUsed(nonce)) {
+      return NextResponse.json({ detail: "Payment already used" }, { status: 402 });
+    }
+
+    const tName    = token_name    ?? "Tether USD";
+    const tVersion = token_version ?? "1";
+    const paymentRequirements = buildRequirements(tName, tVersion);
+
+    const verify = await okxX402Verify({ chainIndex: "196", paymentPayload: payment_payload, paymentRequirements });
+    if (!verify.verified) {
+      return NextResponse.json({ detail: `Payment verification failed: ${verify.error}` }, { status: 402 });
+    }
+
+    const settle = await okxX402Settle({ chainIndex: "196", paymentPayload: payment_payload, paymentRequirements, syncSettle: true });
+    if (!settle.success) {
+      return NextResponse.json({ detail: `Payment settlement failed: ${settle.error}` }, { status: 402 });
+    }
+
+    await dbMarkPaymentHashUsed(nonce, "project_registration");
 
     await dbUpsertProjectMeta({
       project_id:    pid,
@@ -107,16 +157,17 @@ export async function POST(req: NextRequest) {
       discord:       discord?.trim() || null,
       telegram:      telegram?.trim() || null,
       registrant:    registrant?.trim() || null,
-      tx_hash:       tx_hash?.trim() || null,
+      tx_hash:       settle.txHash ?? null,
       logo_base64:   logo_base64 || null,
     });
 
     return NextResponse.json({
-      success: true,
-      project_id: pid,
-      name: name.trim(),
+      success:         true,
+      project_id:      pid,
+      name:            name.trim(),
       token_address,
-      message: `Project ${pid} registered! Governance page: /projects/${pid}`,
+      payment_tx_hash: settle.txHash,
+      message:         `Project ${pid} registered! Governance page: /projects/${pid}`,
     });
   } catch (e: any) {
     return NextResponse.json({ detail: String(e) }, { status: 500 });

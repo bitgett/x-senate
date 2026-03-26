@@ -13,7 +13,9 @@ export async function GET(req: NextRequest) {
   const projectId = req.nextUrl.searchParams.get("project_id") ?? "XSEN";
   const limit = parseInt(req.nextUrl.searchParams.get("limit") ?? "10");
   const onchain = await getLeaderboard(limit);
-  if (onchain.length > 0) return NextResponse.json({ leaderboard: onchain });
+  // Filter out garbage/test agent names (< 3 chars)
+  const validOnchain = (onchain as any[]).filter(a => a.agent_name && a.agent_name.length >= 3);
+  if (validOnchain.length > 0) return NextResponse.json({ leaderboard: validOnchain });
 
   const RANK_LABEL: Record<number, string> = { 1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 5: "5th" };
   // Return Genesis 5 with mock VP data when contract not deployed

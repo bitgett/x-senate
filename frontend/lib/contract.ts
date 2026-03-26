@@ -72,14 +72,20 @@ export async function getTotalStakedInfo(stakingAddress?: string): Promise<Recor
   }
 }
 
+const RANK_LABELS: Record<number, string> = { 1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 5: "5th" };
+
 export async function getLeaderboard(limit = 10, stakingAddress?: string): Promise<unknown[]> {
   try {
     const rows = await staking(stakingAddress).getLeaderboard(limit);
     return rows.map((r: any, i: number) => ({
-      rank:                   i + 1,
-      agent_name:             r.agentName,
-      agent_address:          r.agent,
+      rank:                    i + 1,
+      rank_label:              RANK_LABELS[i + 1] ?? `${i + 1}th`,
+      agent_name:              r.agentName,
+      agent_address:           r.agent,
       total_delegated_vp_xsen: Number(ethers.formatEther(r.totalDelegatedVP)),
+      delegator_count:         0,
+      is_genesis:              false,
+      voted_this_epoch:        false,
     }));
   } catch {
     return [];
