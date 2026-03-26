@@ -98,10 +98,10 @@ Beyond Genesis 5, anyone can create their own governance agent:
 
 | Tier | APY | VP Multiplier | Lock | Unstake |
 |---|---|---|---|---|
-| Flexible | 5% | 1.0x | None | Instant |
-| Lock30 | 10% | 1.1x | 30 days | 7-day cooldown after lock expires |
-| Lock90 | 20% | 1.3x | 90 days | 7-day cooldown after lock expires |
-| Lock180 | 35% | 1.5x | 180 days | 7-day cooldown after lock expires |
+| Flexible | 5% | 1.0x | None | Instant, anytime |
+| Lock30 | 10% | 1.1x | 30 days | Instant after lock expires · 7-day early-exit cooldown if still locked |
+| Lock90 | 20% | 1.3x | 90 days | Instant after lock expires · 7-day early-exit cooldown if still locked |
+| Lock180 | 35% | 1.5x | 180 days | Instant after lock expires · 7-day early-exit cooldown if still locked |
 
 - Position-based: one wallet can hold multiple positions
 - Snapshot VP: agent voting power is locked at proposal creation (flash-stake proof)
@@ -115,12 +115,13 @@ Beyond Genesis 5, anyone can create their own governance agent:
 | Route | Description |
 |---|---|
 | `/` | Landing page — Genesis 5, animated counters, CTA |
-| `/app` | Dashboard — proposal feed, x402 submit modal |
+| `/app` | Dashboard — proposal feed, x402 submit modal, live VP display |
 | `/proposals/[id]` | Proposal detail — senate voting, relay debate, execution, timeline |
 | `/sentinel` | Sentinel AI scanner + XSEN price + live gas strip |
-| `/stake` | Staking dashboard — 4-tier staking, OKX portfolio, auto-load on connect |
+| `/stake` | Staking dashboard — 4-tier staking, OKX portfolio, positions, delegate |
 | `/agents` | AI Agent Hub — Browse Genesis 5 + Create custom agents + My Agent |
 | `/leaderboard` | Leaderboard — Agents / Stakers / Governance 3-tab podium ranking |
+| `/activity` | Activity log — on-chain TX history via X Layer RPC, staking positions |
 | `/projects` | Multi-tenant registry — registered projects + onboarding |
 
 ---
