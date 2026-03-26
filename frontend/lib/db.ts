@@ -231,7 +231,8 @@ export interface UGARow {
 
 export async function dbListUGAs(): Promise<UGARow[]> {
   const sql = getSql();
-  const rows = await sql`SELECT * FROM user_agents ORDER BY score DESC, created_at DESC`;
+  // Exclude garbage/test agent names (< 3 chars or blank)
+  const rows = await sql`SELECT * FROM user_agents WHERE LENGTH(TRIM(agent_name)) >= 3 ORDER BY score DESC, created_at DESC`;
   return rows as unknown as UGARow[];
 }
 
