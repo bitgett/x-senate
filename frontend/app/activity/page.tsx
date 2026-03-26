@@ -97,7 +97,7 @@ export default function ActivityPage() {
       setTxHistory(data.all_transactions ?? []);
       setExplorerUrl(data.explorer_url ?? "");
       if (data.error && data.total === 0) {
-        setTxError("OKLink API unavailable — showing on-chain data only.");
+        setTxError("Could not load transaction history. Check OKX Explorer for full history.");
       }
     } catch {
       setTxError("Failed to load transaction history.");
