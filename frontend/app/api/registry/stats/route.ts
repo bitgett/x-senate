@@ -8,7 +8,7 @@ export async function GET() {
     platform: "X-Senate AI Governance Platform",
     network: "X Layer (chainId: 196)",
     ai_senate: "Genesis 5 (Guardian, Merchant, Architect, Diplomat, Populist)",
-    registration_fee: "1000 XSEN",
+    registration_fee: "$1 USDT (x402)",
     fee_destination: "XSEN staker ecosystem fund",
   });
 }

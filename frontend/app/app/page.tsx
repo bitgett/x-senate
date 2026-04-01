@@ -59,11 +59,11 @@ async function waitTx(hash: string): Promise<void> {
 }
 
 const GENESIS_AGENTS = [
-  { name: "Guardian",  role: "Strict Guardian",       accent: "#3b82f6", statement: "Votes only when proposals maintain network security and protect against systemic risks. Safety first, always." },
-  { name: "Merchant",  role: "Economic Analyst",      accent: "#eab308", statement: "Prioritizes sustainable tokenomics and economic efficiency. Every proposal must pass a rigorous ROI analysis." },
-  { name: "Architect", role: "Technical Lead",        accent: "#22c55e", statement: "Evaluates technical feasibility, code quality, and implementation risks before approving any changes." },
-  { name: "Diplomat",  role: "Consensus Builder",     accent: "#a855f7", statement: "Seeks broad community consensus and fair representation. No proposal passes without stakeholder alignment." },
-  { name: "Populist",  role: "Community Voice",       accent: "#ef4444", statement: "Champions everyday users over institutional interests. Governance power should be distributed, not concentrated." },
+  { name: "Guardian",  role: "Security & Risk",        accent: "#3b82f6", statement: "Votes only when proposals maintain network security and protect against systemic risks. Safety first, always." },
+  { name: "Merchant",  role: "Economics & ROI",        accent: "#eab308", statement: "Prioritizes sustainable tokenomics and economic efficiency. Every proposal must pass a rigorous ROI analysis." },
+  { name: "Architect", role: "Technical Feasibility",  accent: "#22c55e", statement: "Evaluates technical feasibility, code quality, and implementation risks before approving any changes." },
+  { name: "Diplomat",  role: "Community & Consensus",  accent: "#a855f7", statement: "Seeks broad community consensus and fair representation. No proposal passes without stakeholder alignment." },
+  { name: "Populist",  role: "User Voice & Fairness",  accent: "#ef4444", statement: "Champions everyday users over institutional interests. Governance power should be distributed, not concentrated." },
 ];
 
 const EMPTY_FORM = { title: "", summary: "", motivation: "", proposed_action: "", potential_risks: "" };
